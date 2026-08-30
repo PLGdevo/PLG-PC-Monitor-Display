@@ -1,0 +1,5 @@
+build
+!.vscode/*
+pc_monitor/build
+pc_monitor/dist
+pc_monitor/*.spec
