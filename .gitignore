@@ -3,3 +3,6 @@ build
 pc_monitor/build
 pc_monitor/dist
 pc_monitor/*.spec
+pc_monitor/__pycache__
+pc_monitor/test_out.txt
+pc_monitor/test_out.txt.err

@@ -23,7 +23,7 @@ Firmware cho Raspberry Pi Pico điều khiển màn hình TFT ST7789 (240×320),
 - **Splash khởi động**: hiển thị logo dự án kèm thanh Loading khi bật nguồn, luôn chạy đầy đủ mỗi lần khởi động.
 - **Giao diện HOME**: hiển thị trạng thái sân cầu lông theo player 1/2, pin remote, pin máy, trạng thái kết nối và trạng thái RUN/STOP.
 - **Giao diện SETTING**: chọn chức năng (PLAYER / FUNCTION / MODE / ID) bằng encoder xoay, điều hướng menu dạng danh sách.
-- **Task Manager PC**: đọc dữ liệu CPU / RAM / GPU / WiFi / pin / giờ / ngày gửi lên từ máy tính qua USB Serial, vẽ biểu đồ (chart) theo thời gian thực và cập nhật đồng hồ trên màn hình.
+- **Task Manager PC**: đọc dữ liệu CPU / RAM / GPU (usage 3D + VRAM riêng) / WiFi / pin / giờ / ngày gửi lên từ máy tính qua USB Serial, vẽ 5 biểu đồ (chart) theo thời gian thực và hiển thị đồng hồ HH:MM ở góc trên-phải màn hình.
 - **Điều khiển bằng encoder**: xoay để tăng/giảm giá trị, nhấn để chuyển màn hình hoặc RUN/STOP.
 - **Nút BOOTSEL rời**: vào chế độ nạp firmware qua USB mà không cần tháo board ra khỏi máy.
 - **Log chẩn đoán qua USB Serial**: xuất trạng thái vòng lặp, encoder, nút nhấn... để debug từ máy tính.
@@ -96,7 +96,7 @@ Log hiện có trong firmware (in qua `printf`, xuất hiện trên Serial Monit
 
 ## Gửi thông số PC xuống board
 
-Thư mục `pc_monitor/` chứa script Python chạy trên máy tính, đọc CPU / RAM / GPU / WiFi / pin / giờ / ngày rồi gửi xuống Pico qua cổng USB Serial. Phía firmware (`read_taskmanager_serial()` trong `PLG_TFT_LCD.cpp`) đọc, parse chuỗi này không chặn (non-blocking), đẩy dữ liệu vào biểu đồ (`chart_push`) và cập nhật đồng hồ trên màn hình.
+Thư mục `pc_monitor/` chứa script Python chạy trên máy tính, đọc CPU / RAM / GPU (usage 3D + VRAM) / WiFi / pin / giờ / ngày rồi gửi xuống Pico qua cổng USB Serial. Phía firmware (`read_taskmanager_serial()` trong `PLG_TFT_LCD.cpp`) đọc, parse chuỗi này không chặn (non-blocking), đẩy dữ liệu vào biểu đồ (`chart_push`) và cập nhật đồng hồ trên màn hình.
 
 Cài đặt:
 
@@ -110,17 +110,19 @@ Chạy:
 ```bash
 python monitor.py                  # tự dò cổng Pico
 python monitor.py --port COM5      # chỉ định cổng thủ công
-python monitor.py --interval 0.5   # đổi tần suất gửi (giây), mặc định 1s
+python monitor.py --interval 0.5   # đổi tần suất gửi (giây), mặc định 0.8s
 python monitor.py --list           # liệt kê các cổng serial hiện có
 ```
+
+Chạy nền (không có terminal tương tác, ví dụ khi đặt vào Startup): script tự động bỏ qua bước chọn cổng thủ công, tự dò và chờ Pico được cắm vào, đồng thời tự kết nối lại nếu bị rút dây hoặc mất Serial giữa chừng.
 
 Mỗi dòng gửi xuống board có dạng:
 
 ```
-CPU:<int>;RAM:<int>;GPU:<int>;WIFI:<int>;TIME:<HH:MM:SS>;DATE:<DD/MM/YYYY>;BAT:<int>
+CPU:<int>;RAM:<int>;GPU:<int>;GPUMEM:<int>;WIFI:<int>;TIME:<HH:MM:SS>;DATE:<DD/MM/YYYY>;BAT:<int>
 ```
 
-Giá trị CPU/RAM/GPU/WIFI/BAT là phần trăm (0–100). `GPU` trả về `-1` nếu máy không có GPU NVIDIA (dùng `pynvml`); `WIFI` hiện chỉ hỗ trợ đọc cường độ tín hiệu trên Windows (qua `netsh wlan show interfaces`), trả `-1` trên hệ điều hành khác hoặc khi không lấy được; `BAT` trả `-1` nếu máy không có pin (PC bàn) — board sẽ giữ nguyên giá trị pin cũ.
+Giá trị CPU/RAM/GPU/GPUMEM/WIFI/BAT là phần trăm (0–100). `GPU` là % sử dụng engine 3D, `GPUMEM` là % VRAM đã dùng (dedicated + shared / tổng AdapterRAM) — cả hai ưu tiên đọc qua `pynvml` (GPU NVIDIA), nếu không có NVIDIA thì fallback sang WMI performance counter (`GPU Engine` / `GPU Adapter Memory`, có sẵn từ Windows 10 1803+, không cần driver riêng, chạy trong thread nền để không làm chậm vòng gửi chính); trả `-1` nếu không lấy được trên cả hai đường. `WIFI` hiện chỉ hỗ trợ đọc cường độ tín hiệu trên Windows (qua `netsh wlan show interfaces`), trả `-1` trên hệ điều hành khác hoặc khi không lấy được; `BAT` trả `-1` nếu máy không có pin (PC bàn) — board sẽ giữ nguyên giá trị pin cũ.
 
 ## Cấu trúc thư mục
 

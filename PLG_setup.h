@@ -109,8 +109,9 @@ const uint16_t UI_DANGER = RGB565(235, 90, 90);   // canh bao / mat ket noi
 
 const uint16_t UI_CPU = RGB565(70, 220, 130);   // xanh la
 const uint16_t UI_RAM = RGB565(240, 185, 60);   // vang cam
-const uint16_t UI_GPU = RGB565(70, 200, 235);   // xanh cyan
-const uint16_t UI_WIFI = RGB565(110, 150, 255); // xanh duong
+const uint16_t UI_GPU = RGB565(70, 200, 235);    // xanh cyan (GPU 3D)
+const uint16_t UI_GPUMEM = RGB565(200, 120, 235); // tim (GPU memory)
+const uint16_t UI_WIFI = RGB565(110, 150, 255);  // xanh duong
 
 /*------------------- Bang mau nhan dien co the chon trong SETTING > COLOR -------------------*/
 const uint16_t UI_ACCENT_PRESETS[] = {
@@ -170,10 +171,11 @@ void load_color_from_flash()
 // cuoi bieu do; dat -1 va bo qua doan noi lien quan -1 khi ve se tranh duoc bac nay.
 int8_t chart_cpu[CHART_SAMPLES];
 int8_t chart_ram[CHART_SAMPLES];
-int8_t chart_gpu[CHART_SAMPLES];
+int8_t chart_gpu[CHART_SAMPLES];    // GPU 3D (core usage %)
+int8_t chart_gpumem[CHART_SAMPLES]; // GPU memory (VRAM %)
 int8_t chart_wifi[CHART_SAMPLES];
 bool taskmanager_dirty = false; // true khi co mau moi can ve lai
-char serial_line_buf[96]; // du cho dong "CPU:..;RAM:..;GPU:..;WIFI:..;TIME:..;DATE:..;BAT:.." (~70 ky tu)
+char serial_line_buf[112]; // du cho dong "CPU:..;RAM:..;GPU:..;GPUMEM:..;WIFI:..;TIME:..;DATE:..;BAT:.." (~85 ky tu)
 uint8_t serial_line_len = 0;
 
 /*------------------- Dong ho thoi gian (nhan tu pc_monitor/monitor.py, truong TIME:HH:MM:SS;DATE:DD/MM/YYYY) ---*/
@@ -218,7 +220,10 @@ void setup_pin()
 
     if (bhardwareSPI == true)
     {                                    // hw spi
-        uint32_t TFT_SCLK_FREQ = 100000; // Spi freq in KiloHertz , 10000 = 10Mhz
+        // Spi freq in KiloHertz (10000 = 10Mhz). 100000 = 100Mhz: vuot qua muc RP2040 dat duoc
+        // (toi da ~62.5Mhz = clk_peri/2 o xung he thong mac dinh 125Mhz), nen pico-sdk se tu
+        // dong gioi han (clamp) xuong muc phan cung cho phep -> day da la toc do SPI toi da co the dat.
+        uint32_t TFT_SCLK_FREQ = 125000; // yeu cau cao hon xung he thong de dam bao luon cham tran gioi han phan cung
         myTFT.TFTInitSPIType(TFT_SCLK_FREQ, spi0);
     }
     else
