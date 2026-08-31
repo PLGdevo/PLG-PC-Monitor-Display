@@ -124,6 +124,11 @@ PICO_VID_PID = {
 IDENTITY_CMD = b"PLG_ID?\n"
 IDENTITY_REPLY = "I AM PLG_TFT_LCD_TASKMANAGER"
 
+# Khoang cho giua cac lan thu lai khi chua tim/mo duoc cong - dat ngan vi ban than
+# identify_device()/find_pico_port() da tu gioi han thoi gian (khong bao gio treo),
+# nen khong can chờ them nhieu o day; giup phat hien lai board nhanh hon sau khi cam.
+RETRY_DELAY = 0.5
+
 
 def _identify_device_worker(port: str, baud: int, timeout: float, result: dict) -> None:
     try:
@@ -131,7 +136,7 @@ def _identify_device_worker(port: str, baud: int, timeout: float, result: dict) 
     except serial.SerialException:
         return
     try:
-        time.sleep(0.3)  # cho board on dinh sau khi mo cong (DTR toggle co the reset board)
+        time.sleep(0.15)  # cho board on dinh sau khi mo cong (DTR toggle co the reset board)
         ser.reset_input_buffer()
         ser.write(IDENTITY_CMD)
         buf = ""
@@ -149,7 +154,7 @@ def _identify_device_worker(port: str, baud: int, timeout: float, result: dict) 
     safe_close(ser)
 
 
-def identify_device(port: str, baud: int, timeout: float = 1.5, hard_timeout: float = 2.5) -> serial.Serial | None:
+def identify_device(port: str, baud: int, timeout: float = 1.0, hard_timeout: float = 1.5) -> serial.Serial | None:
     """Mo cong serial, gui IDENTITY_CMD va cho board tra loi IDENTITY_REPLY.
     Neu dung la board PLG, TRA VE luon doi tuong Serial dang mo (khong dong lai)
     de vong gui du lieu dung tiep ngay - tranh phai dong roi mo lai cong ngay sau
@@ -344,8 +349,8 @@ def main() -> int:
                               f"co the khong phai board PLG. Van tiep tuc vi da chi dinh --port thu cong.")
                     except serial.SerialException as exc:
                         if not background:
-                            print(f"Loi mo cong {fixed_port}: {exc}, thu lai sau 2s")
-                        time.sleep(2)
+                            print(f"Loi mo cong {fixed_port}: {exc}, thu lai sau {RETRY_DELAY}s")
+                        time.sleep(RETRY_DELAY)
                         continue
                 port = fixed_port
             else:
@@ -353,7 +358,7 @@ def main() -> int:
                 if ser is None:
                     if not background:
                         print("Khong tim/xac thuc duoc board PLG, dang cho... (cam thiet bi vao)")
-                    time.sleep(2)
+                    time.sleep(RETRY_DELAY)
                     continue
                 port = ser.port
 
@@ -367,7 +372,7 @@ def main() -> int:
             except serial.SerialException as exc:
                 print(f"Mat ket noi serial: {exc}, thu ket noi lai...")
                 safe_close(ser)
-                time.sleep(2)
+                time.sleep(RETRY_DELAY)
                 continue
             except KeyboardInterrupt:
                 safe_close(ser)

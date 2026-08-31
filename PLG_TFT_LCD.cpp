@@ -48,6 +48,10 @@ void MONITOR_BEGIN()
 	for (int a = 0; a <= 90; a++)
 	{
 		draw_loading_frame(barX, barY, barW, barH, a);
+		// Doc Serial ngay ca trong doan chay nhanh nay (khong doi den vong cho ben
+		// duoi) de tra loi bat tay "PLG_ID?" cang som cang tot ngay sau khi USB CDC
+		// san sang - rut ngan thoi gian PC nhan dien lai board sau khi rut/cam.
+		read_taskmanager_serial();
 		sleep_ms(10);
 	}
 
