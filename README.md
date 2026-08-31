@@ -118,7 +118,7 @@ python monitor.py --list           # liệt kê các cổng serial hiện có
 
 Chạy nền (không có terminal tương tác, ví dụ khi đặt vào Startup): script tự dò + tự xác thực, chờ board PLG được cắm vào, đồng thời tự kết nối lại nếu bị rút dây hoặc mất Serial giữa chừng — thời gian kết nối lại sau khi rút/cắm dây thường trong khoảng 10-15 giây (phần lớn là thời gian USB tự nhận diện lại thiết bị, không phải độ trễ của script).
 
-**Dùng bản `.exe` dựng sẵn** (không cần cài Python): tải `PLG_monitor.exe` trong [Releases](../../releases), sau đó chạy trực tiếp — cách dùng và các cờ (`--port`, `--interval`, `--list`) giống hệt `python monitor.py`.
+**Dùng bản `.exe` dựng sẵn** (không cần cài Python): tải file `PLG_monitor.zip` trong [Releases](https://github.com/PLGdevo/PLG-PC-Monitor-Display/releases/latest), giải nén rồi chạy `PLG_monitor.exe` — cách dùng và các cờ (`--port`, `--interval`, `--list`) giống hệt `python monitor.py`.
 
 > ⚠️ File tải từ Internet chưa có chữ ký số (code signing certificate), nên Windows sẽ chặn bằng SmartScreen với thông báo "Windows protected your PC". Cách bỏ chặn:
 > - Chuột phải file `.exe` → **Properties** → tick **Unblock** ở cuối tab **General** → **OK**, rồi chạy lại; hoặc
