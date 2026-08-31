@@ -29,6 +29,7 @@ ho tren man hinh thiet bi. BAT la pin cua laptop, hien thi o icon pin ben trai.
 
 import argparse
 import sys
+import threading
 import time
 
 import psutil
@@ -124,38 +125,79 @@ IDENTITY_CMD = b"PLG_ID?\n"
 IDENTITY_REPLY = "I AM PLG_TFT_LCD_TASKMANAGER"
 
 
-def identify_device(port: str, baud: int, timeout: float = 1.5) -> bool:
-    """Mo thu cong serial, gui IDENTITY_CMD va cho board tra loi IDENTITY_REPLY.
-    Tra True neu xac nhan dung la board PLG, False neu khong phai/khong phan hoi."""
+def _identify_device_worker(port: str, baud: int, timeout: float, result: dict) -> None:
     try:
-        with serial.Serial(port, baud, timeout=0.3) as ser:
-            time.sleep(0.3)  # cho board on dinh sau khi mo cong (DTR toggle co the reset board)
-            ser.reset_input_buffer()
-            ser.write(IDENTITY_CMD)
-            buf = ""
-            deadline = time.time() + timeout
-            while time.time() < deadline:
-                chunk = ser.read(ser.in_waiting or 1).decode("ascii", errors="ignore")
-                if chunk:
-                    buf += chunk
-                    if IDENTITY_REPLY in buf:
-                        return True
+        ser = serial.Serial(port, baud, timeout=0.3)
     except serial.SerialException:
-        return False
-    return False
+        return
+    try:
+        time.sleep(0.3)  # cho board on dinh sau khi mo cong (DTR toggle co the reset board)
+        ser.reset_input_buffer()
+        ser.write(IDENTITY_CMD)
+        buf = ""
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            chunk = ser.read(ser.in_waiting or 1).decode("ascii", errors="ignore")
+            if chunk:
+                buf += chunk
+                if IDENTITY_REPLY in buf:
+                    ser.timeout = 1  # tra ve timeout binh thuong dung cho vong gui du lieu
+                    result["ser"] = ser
+                    return
+    except serial.SerialException:
+        pass
+    safe_close(ser)
 
 
-def find_pico_port(baud: int) -> str | None:
+def identify_device(port: str, baud: int, timeout: float = 1.5, hard_timeout: float = 2.5) -> serial.Serial | None:
+    """Mo cong serial, gui IDENTITY_CMD va cho board tra loi IDENTITY_REPLY.
+    Neu dung la board PLG, TRA VE luon doi tuong Serial dang mo (khong dong lai)
+    de vong gui du lieu dung tiep ngay - tranh phai dong roi mo lai cong ngay sau
+    do, vi tren Windows mo lai qua nhanh mot cong USB CDC vua duoc giai phong
+    (nhat la vua cam lai thiet bi) de bi loi "Access is denied" thoang qua.
+
+    Toan bo qua trinh chay trong 1 thread rieng, chi cho toi da `hard_timeout`
+    giay. Ly do: cac cong "Standard Serial over Bluetooth link" ao tren Windows
+    co the TREO RAT LAU (vai chuc giay) ngay tai buoc mo cong (CreateFile), vuot
+    xa timeout doc/ghi thong thuong cua pyserial - neu khong gioi han cung, mot
+    cong Bluetooth "ket" se lam nghen ca vong quet, khien no khong kip thu toi
+    cong that cua board (nhat la sau khi rut/cam lai, so thu tu cong co the da
+    doi). Qua han thi bo qua cong nay, chuyen ngay sang cong tiep theo.
+
+    Tra None neu khong phai board PLG, khong mo/ket noi duoc, hoac qua han."""
+    result: dict = {"ser": None}
+    t = threading.Thread(target=_identify_device_worker, args=(port, baud, timeout, result), daemon=True)
+    t.start()
+    t.join(hard_timeout)
+    return result["ser"]
+
+
+def safe_close(ser: serial.Serial, timeout: float = 1.0) -> None:
+    """Dong cong serial nhung khong bao gio cho vo han. Tren Windows, dong mot
+    handle COM sau khi thiet bi da bi rut vat ly co the TREO VO THOI HAN (khong
+    nem exception, khong tu timeout) - lam ca vong lap ket noi lai bi ket cung
+    ngay tai buoc dong cong cu, khong bao gio toi duoc buoc mo lai (bien hien
+    thanh "cam lai thiet bi nhung khong bao gio ket noi lai duoc"). Chay close()
+    trong 1 thread daemon rieng va chi cho toi da `timeout` giay; neu qua han thi
+    bo qua (thread rac se tu ket thuc khi OS giai phong handle, hoac khi tien
+    trinh chinh thoat), van tiep tuc vong lap thay vi treo may."""
+    t = threading.Thread(target=ser.close, daemon=True)
+    t.start()
+    t.join(timeout)
+
+
+def find_pico_port(baud: int) -> serial.Serial | None:
     """Tu dong do va xac thuc board PLG, khong can nguoi dung chon cong thu cong.
     Uu tien thu cac cong co VID/PID giong Pico truoc (nhanh), sau do thu them cac
     cong serial con lai (phong khi build/driver khac lam VID/PID khac di). Chi
-    nhan cong nao xac thuc thanh cong qua identify_device()."""
+    nhan cong nao xac thuc thanh cong qua identify_device(), tra ve Serial dang mo."""
     ports = list(serial.tools.list_ports.comports())
     likely = [p for p in ports if p.vid is not None and p.pid is not None and (p.vid, p.pid) in PICO_VID_PID]
     others = [p for p in ports if p not in likely]
     for p in likely + others:
-        if identify_device(p.device, baud):
-            return p.device
+        ser = identify_device(p.device, baud)
+        if ser is not None:
+            return ser
     return None
 
 
@@ -276,9 +318,6 @@ def main() -> int:
 
     background = not sys.stdin.isatty()
     fixed_port = args.port
-    if fixed_port and not identify_device(fixed_port, args.baud):
-        print(f"Canh bao: cong {fixed_port} khong tra loi xac thuc \"{IDENTITY_REPLY}\", "
-              f"co the khong phai board PLG. Van tiep tuc vi da chi dinh --port thu cong.")
 
     # lan goi dau cpu_percent tra ve 0.0, bo qua de lay mau chuan
     psutil.cpu_percent(interval=None)
@@ -288,35 +327,51 @@ def main() -> int:
     # cam gi), va tu ket noi lai neu bi rut day/mat ket noi giua chung - khong con can
     # nguoi dung tu chon cong; quan trong khi chay nen (Startup) vi nguoi dung co the
     # bat may truoc, cam Pico vao sau (vd sau 30 phut).
+    #
+    # Luu y: identify_device()/find_pico_port() tra ve LUON doi tuong Serial dang mo
+    # (khong dong roi mo lai cong ngay sau do) - tren Windows mo lai qua nhanh mot
+    # cong USB CDC vua duoc giai phong (nhat la ngay sau khi cam lai thiet bi) hay bi
+    # loi "Access is denied" thoang qua, day chinh la nguyen nhan lam lan ket noi lai
+    # (sau khi rut/cam thiet bi) bi that bai du board da san sang.
     try:
         while True:
-            port = fixed_port or find_pico_port(args.baud)
-            if port is None:
-                if not background:
-                    print("Khong tim/xac thuc duoc board PLG, dang cho... (cam thiet bi vao)")
-                time.sleep(2)
-                continue
-
-            try:
-                ser = serial.Serial(port, args.baud, timeout=1)
-            except serial.SerialException as exc:
-                if not background:
-                    print(f"Loi mo cong {port}: {exc}, thu lai sau 2s")
-                time.sleep(2)
-                continue
+            if fixed_port:
+                ser = identify_device(fixed_port, args.baud)
+                if ser is None:
+                    try:
+                        ser = serial.Serial(fixed_port, args.baud, timeout=1)
+                        print(f"Canh bao: cong {fixed_port} khong tra loi xac thuc \"{IDENTITY_REPLY}\", "
+                              f"co the khong phai board PLG. Van tiep tuc vi da chi dinh --port thu cong.")
+                    except serial.SerialException as exc:
+                        if not background:
+                            print(f"Loi mo cong {fixed_port}: {exc}, thu lai sau 2s")
+                        time.sleep(2)
+                        continue
+                port = fixed_port
+            else:
+                ser = find_pico_port(args.baud)
+                if ser is None:
+                    if not background:
+                        print("Khong tim/xac thuc duoc board PLG, dang cho... (cam thiet bi vao)")
+                    time.sleep(2)
+                    continue
+                port = ser.port
 
             print(f"Da xac thuc board PLG tren {port} @ {args.baud} baud, gui du lieu moi {args.interval}s. Ctrl+C de dung.")
             try:
-                with ser:
-                    while True:
-                        payload = build_payload()
-                        ser.write(payload.encode("ascii"))
-                        print(payload.strip())
-                        time.sleep(args.interval)
+                while True:
+                    payload = build_payload()
+                    ser.write(payload.encode("ascii"))
+                    print(payload.strip())
+                    time.sleep(args.interval)
             except serial.SerialException as exc:
                 print(f"Mat ket noi serial: {exc}, thu ket noi lai...")
+                safe_close(ser)
                 time.sleep(2)
                 continue
+            except KeyboardInterrupt:
+                safe_close(ser)
+                raise
     except KeyboardInterrupt:
         print("\nDa dung.")
         return 0
