@@ -258,6 +258,27 @@ void MONITOR_FUNTION()
 }
 
 /*------------------- Man hinh dong ho -------------------*/
+// Kich thuoc + vi tri chu gio "HH:MM:SS" (8 ky tu). Dung size5 (to hon size4 truoc day) de de
+// nhin hon tu xa; moi ky tu rong size*(5+1)=30px, cao size*8=40px, tong rong 8*30=240px
+// -> can giua: x=(320-240)/2=40. Vi tri ky tu cuoi (idx7): 40+7*30=250, van duoi nguong 255
+// cua con tro X kieu uint8_t trong TFTdrawChar (goi tu ben trong TFTdrawText/o day), an toan.
+static const int16_t TIME_SIZE = 5;
+static const int16_t TIME_CHAR_W = TIME_SIZE * (5 + 1);
+static const int16_t TIME_CHAR_H = TIME_SIZE * 8;
+static const int16_t TIME_LEN = 8; // "HH:MM:SS"
+static const int16_t TIME_X = (320 - TIME_LEN * TIME_CHAR_W) / 2;
+static const int16_t TIME_Y = 95;
+
+// xoa + ve lai DUNG 1 ky tu gio tai vi tri idx. Cap nhat tung ky tu thay vi ca chuoi giup hieu
+// ung doi giay muot hon: da so lan cap nhat chi doi 1-2 ky tu cuoi (giay), cac ky tu khac
+// (gio/phut/dau ':') dung nguyen tren man hinh, khong bi chop lai toan bo dong chu moi giay.
+static void draw_time_char(int idx, char c)
+{
+    int16_t x = TIME_X + idx * TIME_CHAR_W;
+    myTFT.TFTfillRect(x, TIME_Y, TIME_CHAR_W, TIME_CHAR_H, UI_BG);
+    myTFT.TFTdrawChar(x, TIME_Y, (uint8_t)c, UI_ACCENT, UI_BG, TIME_SIZE);
+}
+
 // man hinh dong ho: hien gio + ngay hien tai (nhan tu monitor.py qua serial, truong TIME/DATE)
 // giao dien toi gian: chi 2 dong chu can giua, khong khung khong tieu de
 void MONITOR_CLOCK()
@@ -268,22 +289,25 @@ void MONITOR_CLOCK()
     {
         last_show_clock = show_clock;
         myTFT.TFTfillRect(0, 24, 320, 216, UI_BG);
-        strcpy(last_time_str, "");
+        // memset ve 0 (khong phai strcpy("")): can moi phan tu trong mang deu khac ky tu that
+        // (so/':') de vong lap so sanh tung ky tu ben duoi bat buoc ve lai TOAN BO 8 ky tu ngay
+        // sau khi man hinh vua bi xoa trang - strcpy("") chi dat byte dau ve 0, cac byte con lai
+        // van giu gia tri cu va co the trung voi gio hien tai, khien ky tu do bi bo qua (khong
+        // ve lai) va de trong mot khoang den tren man hinh.
+        memset(last_time_str, 0, sizeof(last_time_str));
         strcpy(last_date_str, "");
         clock_dirty = true;
     }
 
     if (clock_dirty)
     {
-        if (strcmp(last_time_str, current_time_str) != 0)
+        for (int i = 0; i < TIME_LEN; i++)
         {
-            myTFT.TFTfillRect(0, 100, 320, 45, UI_BG);
-            // can giua: size4, moi ky tu chiem size*(5+1)=24px. "HH:MM:SS" (8 ky tu) rong 192px
-            // -> x=(320-192)/2=64. Dung size4 (thay vi 5) de vi tri ky tu cuoi cung (64+7*24=232)
-            // nam an toan duoi nguong 255 cua con tro X kieu uint8_t trong TFTdrawText, tranh tran/wrap.
-            myTFT.TFTdrawText(64, 108, current_time_str, UI_ACCENT, UI_BG, 4);
-            strcpy(last_time_str, current_time_str);
+            if (last_time_str[i] != current_time_str[i])
+                draw_time_char(i, current_time_str[i]);
         }
+        strcpy(last_time_str, current_time_str);
+
         if (strcmp(last_date_str, current_date_str) != 0)
         {
             myTFT.TFTfillRect(0, 155, 320, 25, UI_BG);
@@ -298,6 +322,36 @@ void MONITOR_CLOCK()
 }
 
 /*------------------- Man hinh chon mau -------------------*/
+// vi tri + kich thuoc 1 o mau, dung chung cho ve khung lan dau va cap nhat khi doi lua chon
+static const int16_t COLOR_SW_W = 26, COLOR_SW_GAP = 6, COLOR_SW_START_X = 12, COLOR_SW_Y = 55, COLOR_SW_H = 26;
+
+// ve 1 o mau tai vi tri i; xoa truoc vung vien-noi-bat (outer highlight) cua lan chon truoc
+// do -2px so voi o mau, tranh con sot vien khi chuyen tu trang thai selected sang khong selected
+static void draw_color_swatch(uint8_t i, bool selected)
+{
+    int16_t sx = COLOR_SW_START_X + i * (COLOR_SW_W + COLOR_SW_GAP);
+    myTFT.TFTfillRect(sx - 3, COLOR_SW_Y - 3, COLOR_SW_W + 6, COLOR_SW_H + 6, UI_BG);
+    myTFT.TFTfillRoundRect(sx, COLOR_SW_Y, COLOR_SW_W, COLOR_SW_H, 4, UI_ACCENT_PRESETS[i]);
+    myTFT.TFTdrawRoundRect(sx, COLOR_SW_Y, COLOR_SW_W, COLOR_SW_H, 4, selected ? UI_TEXT : UI_BORDER);
+    if (selected)
+        myTFT.TFTdrawRoundRect(sx - 2, COLOR_SW_Y - 2, COLOR_SW_W + 4, COLOR_SW_H + 4, 5, UI_TEXT);
+}
+
+// xoa + ve lai chi dong ten mau (thay doi moi lan doi lua chon), khong dung ca vung nhu truoc
+// -> tranh chop man hinh khi xoay encoder nhanh.
+// Font mac dinh: rong 5px + 1px cach, cao 8px -> voi size 3 la 18px/ky tu, cao 24px; truoc day
+// vung xoa chi cao 24px bat dau tu y=105 (den y=129) trong khi chu ve tu y=110 den y=134,
+// cat mat 5px duoi cung -> chu moi ngan hon de sot lai net chu cu. Tang vung xoa len 34px
+// (het khoang y=134) de xoa sach; can giua theo do dai ten mau (khac nhau giua cac mau).
+static void draw_color_name(int8_t idx)
+{
+    const int16_t charW = 3 * (5 + 1); // size3 * (font width + khoang cach)
+    int16_t textW = (int16_t)strlen(UI_ACCENT_NAMES[idx]) * charW;
+    int16_t x = (320 - textW) / 2;
+    myTFT.TFTfillRect(0, 105, 320, 34, UI_BG);
+    myTFT.TFTdrawText(x, 110, (char *)UI_ACCENT_NAMES[idx], UI_ACCENT_PRESETS[idx], UI_BG, 3);
+}
+
 // man hinh chinh mau giao dien: dung encoder chon 1 trong cac mau nhan dien co san,
 // nhan nut de ap dung va quay lai menu SETTING
 void MONITOR_COLOR()
@@ -314,24 +368,24 @@ void MONITOR_COLOR()
         last_color_index = -1;
     }
 
-    if (last_color_index != color_index)
+    if (last_color_index < 0)
     {
-        last_color_index = color_index;
-
-        myTFT.TFTfillRect(0, 40, 320, 130, UI_BG);
-
-        const int16_t swW = 26, swGap = 6, startX = 12, swY = 55, swH = 26;
+        // vao man hinh lan dau (hoac quay lai): ve toan bo 1 lan, gom ca dong huong dan tinh
         for (uint8_t i = 0; i < UI_ACCENT_PRESET_COUNT; i++)
-        {
-            int16_t sx = startX + i * (swW + swGap);
-            bool selected = (i == color_index);
-            myTFT.TFTfillRoundRect(sx, swY, swW, swH, 4, UI_ACCENT_PRESETS[i]);
-            myTFT.TFTdrawRoundRect(sx, swY, swW, swH, 4, selected ? UI_TEXT : UI_BORDER);
-            if (selected)
-                myTFT.TFTdrawRoundRect(sx - 2, swY - 2, swW + 4, swH + 4, 5, UI_TEXT);
-        }
-
-        myTFT.TFTdrawText(100, 110, (char *)UI_ACCENT_NAMES[color_index], UI_ACCENT_PRESETS[color_index], UI_BG, 3);
-        myTFT.TFTdrawText(40, 145, (char *)"Nhan nut de ap dung", UI_TEXT_DIM, UI_BG, 1);
+            draw_color_swatch(i, i == color_index);
+        draw_color_name(color_index);
+        // can giua: "Nhan nut de ap dung" 19 ky tu, size1 -> moi ky tu 6px, rong 114px
+        // -> x=(320-114)/2=103
+        myTFT.TFTdrawText(103, 145, (char *)"Nhan nut de ap dung", UI_TEXT_DIM, UI_BG, 1);
+        last_color_index = color_index;
+    }
+    else if (last_color_index != color_index)
+    {
+        // chi ve lai 2 o mau bi anh huong (o cu bo chon + o moi duoc chon) va dong ten mau,
+        // thay vi xoa lai toan bo vung -> chuyen doi giua cac mau muot, khong nhap nhay
+        draw_color_swatch(last_color_index, false);
+        draw_color_swatch(color_index, true);
+        draw_color_name(color_index);
+        last_color_index = color_index;
     }
 }
