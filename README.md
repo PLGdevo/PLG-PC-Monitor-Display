@@ -116,7 +116,7 @@ python monitor.py --list           # liệt kê các cổng serial hiện có
 
 **Tự động xác thực thiết bị**: thay vì phải tự chọn đúng cổng COM, script gửi lệnh `PLG_ID?` xuống lần lượt các cổng serial đang cắm (ưu tiên cổng có VID/PID giống Pico trước, sau đó thử các cổng còn lại) và chỉ coi là board hợp lệ khi nhận lại đúng câu trả lời `I AM PLG_TFT_LCD_TASKMANAGER` từ firmware (`read_taskmanager_serial()` xử lý lệnh này trong `PLG_TFT_LCD.cpp`). Nhờ vậy tránh được trường hợp gửi nhầm dữ liệu xuống một thiết bị USB Serial khác có cùng VID/PID (ví dụ Pico khác chạy firmware khác).
 
-Chạy nền (không có terminal tương tác, ví dụ khi đặt vào Startup): script tự dò + tự xác thực, chờ board PLG được cắm vào, đồng thời tự kết nối lại nếu bị rút dây hoặc mất Serial giữa chừng.
+Chạy nền (không có terminal tương tác, ví dụ khi đặt vào Startup): script tự dò + tự xác thực, chờ board PLG được cắm vào, đồng thời tự kết nối lại nếu bị rút dây hoặc mất Serial giữa chừng — thời gian kết nối lại sau khi rút/cắm dây thường trong khoảng 10-15 giây (phần lớn là thời gian USB tự nhận diện lại thiết bị, không phải độ trễ của script).
 
 **Dùng bản `.exe` dựng sẵn** (không cần cài Python): tải `PLG_monitor.exe` trong [Releases](../../releases), sau đó chạy trực tiếp — cách dùng và các cờ (`--port`, `--interval`, `--list`) giống hệt `python monitor.py`.
 
