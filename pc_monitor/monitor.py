@@ -5,12 +5,16 @@ PLG PC Task Monitor
 Doc thong so CPU / RAM / GPU / WIFI tren may tinh va gui qua cong Serial (USB)
 xuong board Raspberry Pi Pico (PLG_TFT_LCD_TASKMANAGER).
 
+Tu dong do va xac thuc dung board PLG (khong can chon cong thu cong): script gui
+lenh "PLG_ID?" xuong tung cong serial, chi coi la dung thiet bi khi nhan lai dung
+cau tra loi "I AM PLG_TFT_LCD_TASKMANAGER" tu firmware.
+
 Yeu cau cai dat:
     pip install -r requirements.txt
 
 Chay:
-    python monitor.py                  # tu do tim cong Pico
-    python monitor.py --port COM5      # chi dinh cong thu cong
+    python monitor.py                  # tu do + tu xac thuc board PLG
+    python monitor.py --port COM5      # ep dung cong nay, bo qua buoc do/xac thuc
     python monitor.py --interval 0.5   # doi khoang gui du lieu (giay)
     python monitor.py --list           # liet ke cac cong serial dang co
 
@@ -112,11 +116,45 @@ PICO_VID_PID = {
     (0x2E8A, 0x000A),  # Pico CDC (stdio USB mac dinh cua Pico SDK)
 }
 
+# Bat tay xac thuc thiet bi: gui cau lenh nay xuong cong serial, chi coi la dung
+# board PLG neu nhan lai dung cau tra loi IDENTITY_REPLY. Tranh truong hop VID/PID
+# trung voi mot thiet bi USB CDC khac (vd Pico chay firmware khac) roi gui nham
+# du lieu xuong do -> khong con phai nguoi dung tu chon cong bang tay.
+IDENTITY_CMD = b"PLG_ID?\n"
+IDENTITY_REPLY = "I AM PLG_TFT_LCD_TASKMANAGER"
 
-def find_pico_port() -> str | None:
-    """Tu dong do tim cong serial cua Pico theo VID/PID; None neu khong thay."""
-    for p in serial.tools.list_ports.comports():
-        if p.vid is not None and p.pid is not None and (p.vid, p.pid) in PICO_VID_PID:
+
+def identify_device(port: str, baud: int, timeout: float = 1.5) -> bool:
+    """Mo thu cong serial, gui IDENTITY_CMD va cho board tra loi IDENTITY_REPLY.
+    Tra True neu xac nhan dung la board PLG, False neu khong phai/khong phan hoi."""
+    try:
+        with serial.Serial(port, baud, timeout=0.3) as ser:
+            time.sleep(0.3)  # cho board on dinh sau khi mo cong (DTR toggle co the reset board)
+            ser.reset_input_buffer()
+            ser.write(IDENTITY_CMD)
+            buf = ""
+            deadline = time.time() + timeout
+            while time.time() < deadline:
+                chunk = ser.read(ser.in_waiting or 1).decode("ascii", errors="ignore")
+                if chunk:
+                    buf += chunk
+                    if IDENTITY_REPLY in buf:
+                        return True
+    except serial.SerialException:
+        return False
+    return False
+
+
+def find_pico_port(baud: int) -> str | None:
+    """Tu dong do va xac thuc board PLG, khong can nguoi dung chon cong thu cong.
+    Uu tien thu cac cong co VID/PID giong Pico truoc (nhanh), sau do thu them cac
+    cong serial con lai (phong khi build/driver khac lam VID/PID khac di). Chi
+    nhan cong nao xac thuc thanh cong qua identify_device()."""
+    ports = list(serial.tools.list_ports.comports())
+    likely = [p for p in ports if p.vid is not None and p.pid is not None and (p.vid, p.pid) in PICO_VID_PID]
+    others = [p for p in ports if p not in likely]
+    for p in likely + others:
+        if identify_device(p.device, baud):
             return p.device
     return None
 
@@ -220,38 +258,9 @@ def build_payload() -> str:
     )
 
 
-def choose_port_interactively() -> str | None:
-    """Hien menu cho nguoi dung chon cong COM khi khoi dong (dung cho ban .exe)."""
-    auto = find_pico_port()
-    while True:
-        ports = list(serial.tools.list_ports.comports())
-        print("\n=== PLG_monitor - Chon cong COM ===")
-        if not ports:
-            print("Khong tim thay cong serial nao dang cam vao may.")
-        for i, p in enumerate(ports):
-            mark = "  <== Pico tu phat hien" if p.device == auto else ""
-            print(f"  [{i}] {p.device}\t{p.description}{mark}")
-        print("  [r] Quet lai")
-        print("  [q] Thoat")
-        choice = input("Chon so thu tu cong (Enter de dung cong Pico tu phat hien): ").strip().lower()
-
-        if choice == "":
-            if auto:
-                return auto
-            print("Khong co cong tu phat hien, hay chon mot so thu tu ben tren.")
-            continue
-        if choice == "q":
-            return None
-        if choice == "r":
-            continue
-        if choice.isdigit() and 0 <= int(choice) < len(ports):
-            return ports[int(choice)].device
-        print("Lua chon khong hop le, thu lai.")
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description="Gui thong so CPU/RAM/GPU/WIFI xuong board PLG qua Serial")
-    parser.add_argument("--port", help="Cong serial (vd COM5, /dev/ttyACM0). Bo trong se tu do tim.")
+    parser.add_argument("--port", help="Ep dung cong serial nay (vd COM5, /dev/ttyACM0), bo qua buoc tu do tim + xac thuc.")
     parser.add_argument("--baud", type=int, default=115200, help="Toc do baud (mac dinh 115200)")
     parser.add_argument("--interval", type=float, default=0.8, help="Khoang thoi gian gui du lieu, giay (mac dinh 0.8)")
     parser.add_argument("--list", action="store_true", help="Liet ke cac cong serial va thoat")
@@ -267,26 +276,24 @@ def main() -> int:
 
     background = not sys.stdin.isatty()
     fixed_port = args.port
-
-    if fixed_port is None and not background:
-        fixed_port = choose_port_interactively()
-        if fixed_port is None:
-            print("Da huy, khong chon cong nao.")
-            return 1
+    if fixed_port and not identify_device(fixed_port, args.baud):
+        print(f"Canh bao: cong {fixed_port} khong tra loi xac thuc \"{IDENTITY_REPLY}\", "
+              f"co the khong phai board PLG. Van tiep tuc vi da chi dinh --port thu cong.")
 
     # lan goi dau cpu_percent tra ve 0.0, bo qua de lay mau chuan
     psutil.cpu_percent(interval=None)
     time.sleep(0.2)
 
-    # Vong lap ngoai: tu dong cho/do lai cong khi chua cam Pico, va tu ket noi lai
-    # neu bi rut day/mat ket noi giua chung - quan trong khi chay nen (Startup) vi
-    # nguoi dung co the bat may truoc, cam Pico vao sau (vd sau 30 phut).
+    # Vong lap ngoai: tu dong do/xac thuc lai cong khi chua cam dung board (hoac chua
+    # cam gi), va tu ket noi lai neu bi rut day/mat ket noi giua chung - khong con can
+    # nguoi dung tu chon cong; quan trong khi chay nen (Startup) vi nguoi dung co the
+    # bat may truoc, cam Pico vao sau (vd sau 30 phut).
     try:
         while True:
-            port = fixed_port or find_pico_port()
+            port = fixed_port or find_pico_port(args.baud)
             if port is None:
                 if not background:
-                    print("Khong tim thay Pico, dang cho... (cam thiet bi vao)")
+                    print("Khong tim/xac thuc duoc board PLG, dang cho... (cam thiet bi vao)")
                 time.sleep(2)
                 continue
 
@@ -298,7 +305,7 @@ def main() -> int:
                 time.sleep(2)
                 continue
 
-            print(f"Ket noi {port} @ {args.baud} baud, gui du lieu moi {args.interval}s. Ctrl+C de dung.")
+            print(f"Da xac thuc board PLG tren {port} @ {args.baud} baud, gui du lieu moi {args.interval}s. Ctrl+C de dung.")
             try:
                 with ser:
                     while True:

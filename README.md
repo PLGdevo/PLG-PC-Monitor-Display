@@ -108,13 +108,15 @@ pip install -r requirements.txt
 Chạy:
 
 ```bash
-python monitor.py                  # tự dò cổng Pico
-python monitor.py --port COM5      # chỉ định cổng thủ công
+python monitor.py                  # tự dò + tự xác thực board PLG, không cần chọn cổng
+python monitor.py --port COM5      # ép dùng cổng này, bỏ qua bước dò/xác thực tự động
 python monitor.py --interval 0.5   # đổi tần suất gửi (giây), mặc định 0.8s
 python monitor.py --list           # liệt kê các cổng serial hiện có
 ```
 
-Chạy nền (không có terminal tương tác, ví dụ khi đặt vào Startup): script tự động bỏ qua bước chọn cổng thủ công, tự dò và chờ Pico được cắm vào, đồng thời tự kết nối lại nếu bị rút dây hoặc mất Serial giữa chừng.
+**Tự động xác thực thiết bị**: thay vì phải tự chọn đúng cổng COM, script gửi lệnh `PLG_ID?` xuống lần lượt các cổng serial đang cắm (ưu tiên cổng có VID/PID giống Pico trước, sau đó thử các cổng còn lại) và chỉ coi là board hợp lệ khi nhận lại đúng câu trả lời `I AM PLG_TFT_LCD_TASKMANAGER` từ firmware (`read_taskmanager_serial()` xử lý lệnh này trong `PLG_TFT_LCD.cpp`). Nhờ vậy tránh được trường hợp gửi nhầm dữ liệu xuống một thiết bị USB Serial khác có cùng VID/PID (ví dụ Pico khác chạy firmware khác).
+
+Chạy nền (không có terminal tương tác, ví dụ khi đặt vào Startup): script tự dò + tự xác thực, chờ board PLG được cắm vào, đồng thời tự kết nối lại nếu bị rút dây hoặc mất Serial giữa chừng.
 
 Mỗi dòng gửi xuống board có dạng:
 
