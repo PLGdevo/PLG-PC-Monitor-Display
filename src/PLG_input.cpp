@@ -109,7 +109,20 @@ void read_button()
         // canh tha nut: neu chua bi xu ly bang giu lau thi day la 1 lan nhan ngan -> chon/xac nhan
         if (!button_long_fired)
         {
-            if (desktop_state == DESKTOP_SETING && funtion_mode == FUNTION_MODE_TASK)
+            if (desktop_state == DESKTOP_HOME && show_clock)
+            {
+                printf("PLG_>>>> HOME: exit CLOCK, back to TASK MANAGER\n\r");
+                show_clock = false;
+                last_show_clock = false; // dong bo lai co, de lan sau bat CLOCK duoc xoa man hinh dung cach
+                // buoc MONITOR_TASKMANAGER ve lai toan bo (xoa sach noi dung CLOCK cu, ve lai khung chart)
+                last_desktop = !desktop;
+            }
+            else if (desktop_state == DESKTOP_HOME)
+            {
+                printf("PLG_>>>> HOME: enter CLOCK\n\r");
+                show_clock = true;
+            }
+            else if (desktop_state == DESKTOP_SETING && funtion_mode == FUNTION_MODE_TASK)
             {
                 printf("PLG_>>>> back to TASK MANAGER (home)\n\r");
                 display_number = 0; // man hinh chinh (HOME) chinh la Task Manager

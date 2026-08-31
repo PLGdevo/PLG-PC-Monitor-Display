@@ -60,7 +60,11 @@ void loop()
     switch (desktop_state)
     {
     case DESKTOP_HOME:
-        MONITOR_TASKMANAGER();
+        // nhan ngan 1 lan tren man hinh chinh: chuyen doi tab Task Manager <-> Clock (xem read_button())
+        if (show_clock)
+            MONITOR_CLOCK();
+        else
+            MONITOR_TASKMANAGER();
         break;
     case DESKTOP_SETING:
         if (show_clock)
