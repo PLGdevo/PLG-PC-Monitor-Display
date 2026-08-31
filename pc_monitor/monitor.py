@@ -35,6 +35,52 @@ import time
 import psutil
 import serial
 import serial.tools.list_ports
+from colorama import Fore, Style
+from colorama import init as colorama_init
+
+# Chi bat mau khi in ra console that (isatty); khi bi redirect ra file/log thi
+# tat mau de tranh ghi rac ma escape ANSI vao log. colorama_init dich cac ma ANSI
+# nay sang WinAPI console tren cmd.exe/PowerShell cu khong tu ho tro ANSI.
+USE_COLOR = sys.stdout.isatty()
+if USE_COLOR:
+    colorama_init(autoreset=True)
+
+
+def _c(text: str, color: str) -> str:
+    """Boc mau ANSI quanh text neu dang in ra console that, giu nguyen text neu
+    khong (vd khi bi redirect ra file) de khong lam ban log bang ma escape."""
+    return f"{color}{text}{Style.RESET_ALL}" if USE_COLOR else text
+
+
+def _fmt_metric(label: str, value: int, warn: int = 80, danger: int = 95, unit: str = "%", invert: bool = False) -> str:
+    """Dinh dang 1 chi so (CPU/RAM/GPU/...) co mau theo nguong. Mac dinh (invert=
+    False, dung cho CPU/RAM/GPU/VRAM): xanh la binh thuong, vang khi >= warn, do
+    khi >= danger - gia tri CAO la dang lo. invert=True (dung cho WIFI/BAT): dao
+    nguoc chieu so sanh - gia tri THAP moi la dang lo (vd pin/tin hieu yeu).
+    Gia tri -1 (khong doc duoc) hien "N/A" mau xam thay vi "-1%" gay hieu lam."""
+    if value is None or value < 0:
+        return _c(f"{label} N/A", Fore.LIGHTBLACK_EX)
+    if invert:
+        color = Fore.RED if value <= danger else Fore.YELLOW if value <= warn else Fore.GREEN
+    else:
+        color = Fore.RED if value >= danger else Fore.YELLOW if value >= warn else Fore.GREEN
+    return _c(f"{label} {value:>3}{unit}", color)
+
+
+def format_console_line(m: dict) -> str:
+    """Dong log console dang bang, day du thong tin, de doc hon nhieu so voi in
+    thang chuoi payload tho (CPU:45;RAM:62;...) - dung khi debug bang mat."""
+    parts = [
+        _c(f"[{m['time']}]", Fore.CYAN),
+        _fmt_metric("CPU", m["cpu"]),
+        _fmt_metric("RAM", m["ram"]),
+        _fmt_metric("GPU", m["gpu"]),
+        _fmt_metric("VRAM", m["gpu_mem"]),
+        _fmt_metric("WIFI", m["wifi"], warn=40, danger=20, invert=True),
+        _fmt_metric("BAT", m["bat"], warn=30, danger=15, invert=True),
+    ]
+    return "  ".join(parts)
+
 
 try:
     import pynvml
@@ -290,18 +336,23 @@ def get_battery_percent() -> int:
         return -1
 
 
-def build_payload() -> str:
-    cpu = get_cpu_percent()
-    ram = get_ram_percent()
-    gpu = get_gpu_percent()
-    gpu_mem = get_gpu_mem_percent()
-    wifi = get_wifi_percent()
-    now = get_time_str()
-    today = get_date_str()
-    bat = get_battery_percent()
+def gather_metrics() -> dict:
+    return {
+        "cpu": get_cpu_percent(),
+        "ram": get_ram_percent(),
+        "gpu": get_gpu_percent(),
+        "gpu_mem": get_gpu_mem_percent(),
+        "wifi": get_wifi_percent(),
+        "time": get_time_str(),
+        "date": get_date_str(),
+        "bat": get_battery_percent(),
+    }
+
+
+def build_payload(m: dict) -> str:
     return (
-        f"CPU:{cpu};RAM:{ram};GPU:{gpu};GPUMEM:{gpu_mem};WIFI:{wifi};"
-        f"TIME:{now};DATE:{today};BAT:{bat}\n"
+        f"CPU:{m['cpu']};RAM:{m['ram']};GPU:{m['gpu']};GPUMEM:{m['gpu_mem']};WIFI:{m['wifi']};"
+        f"TIME:{m['time']};DATE:{m['date']};BAT:{m['bat']}\n"
     )
 
 
@@ -345,11 +396,12 @@ def main() -> int:
                 if ser is None:
                     try:
                         ser = serial.Serial(fixed_port, args.baud, timeout=1)
-                        print(f"Canh bao: cong {fixed_port} khong tra loi xac thuc \"{IDENTITY_REPLY}\", "
-                              f"co the khong phai board PLG. Van tiep tuc vi da chi dinh --port thu cong.")
+                        print(_c(f"Canh bao: cong {fixed_port} khong tra loi xac thuc \"{IDENTITY_REPLY}\", "
+                                 f"co the khong phai board PLG. Van tiep tuc vi da chi dinh --port thu cong.",
+                                 Fore.YELLOW))
                     except serial.SerialException as exc:
                         if not background:
-                            print(f"Loi mo cong {fixed_port}: {exc}, thu lai sau {RETRY_DELAY}s")
+                            print(_c(f"Loi mo cong {fixed_port}: {exc}, thu lai sau {RETRY_DELAY}s", Fore.RED))
                         time.sleep(RETRY_DELAY)
                         continue
                 port = fixed_port
@@ -357,20 +409,22 @@ def main() -> int:
                 ser = find_pico_port(args.baud)
                 if ser is None:
                     if not background:
-                        print("Khong tim/xac thuc duoc board PLG, dang cho... (cam thiet bi vao)")
+                        print(_c("Khong tim/xac thuc duoc board PLG, dang cho... (cam thiet bi vao)", Fore.YELLOW))
                     time.sleep(RETRY_DELAY)
                     continue
                 port = ser.port
 
-            print(f"Da xac thuc board PLG tren {port} @ {args.baud} baud, gui du lieu moi {args.interval}s. Ctrl+C de dung.")
+            print(_c(f"Da xac thuc board PLG tren {port} @ {args.baud} baud, gui du lieu moi {args.interval}s. Ctrl+C de dung.",
+                     Fore.GREEN))
             try:
                 while True:
-                    payload = build_payload()
+                    m = gather_metrics()
+                    payload = build_payload(m)
                     ser.write(payload.encode("ascii"))
-                    print(payload.strip())
+                    print(format_console_line(m))
                     time.sleep(args.interval)
             except serial.SerialException as exc:
-                print(f"Mat ket noi serial: {exc}, thu ket noi lai...")
+                print(_c(f"Mat ket noi serial: {exc}, thu ket noi lai...", Fore.RED))
                 safe_close(ser)
                 time.sleep(RETRY_DELAY)
                 continue
