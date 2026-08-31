@@ -28,6 +28,16 @@ pico_sdk_init()
 add_executable(PLG_TFT_LCD
     PLG_TFT_LCD.cpp
 
+    src/PLG_pins.cpp
+    src/PLG_theme.cpp
+    src/PLG_state.cpp
+    src/PLG_display.cpp
+    src/PLG_flash_settings.cpp
+    src/PLG_serial_link.cpp
+    src/PLG_charts.cpp
+    src/PLG_screens.cpp
+    src/PLG_input.cpp
+
     PLG_lib/ST7789_TFT_PICO-main/src/st7789/ST7789_TFT.cpp
     PLG_lib/ST7789_TFT_PICO-main/src/st7789/ST7789_TFT_graphics.cpp
     PLG_lib/ST7789_TFT_PICO-main/src/st7789/ST7789_TFT_Print.cpp
@@ -35,6 +45,8 @@ add_executable(PLG_TFT_LCD
 )
 
 target_include_directories(PLG_TFT_LCD PRIVATE
+    .
+    include
     PLG_lib/ST7789_TFT_PICO-main/include
 )
 # link lib computer

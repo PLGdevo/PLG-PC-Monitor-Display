@@ -22,7 +22,7 @@ Firmware cho Raspberry Pi Pico điều khiển màn hình TFT ST7789 (240×320),
 
 - **Splash khởi động**: hiển thị logo dự án kèm thanh Loading khi bật nguồn, luôn chạy đầy đủ mỗi lần khởi động.
 - **Giao diện HOME**: hiển thị trạng thái sân cầu lông theo player 1/2, pin remote, pin máy, trạng thái kết nối và trạng thái RUN/STOP.
-- **Giao diện SETTING**: chọn chức năng (PLAYER / FUNCTION / MODE / ID) bằng encoder xoay, điều hướng menu dạng danh sách.
+- **Giao diện SETTING**: menu dạng danh sách gồm PLAYER / FUNTION / MODE / CLOCK / COLOR / TASK, chọn bằng encoder xoay; CLOCK mở màn hình đồng hồ, COLOR mở màn hình chọn màu nhận diện, TASK quay lại thẳng màn hình Task Manager (HOME).
 - **Task Manager PC**: đọc dữ liệu CPU / RAM / GPU (usage 3D + VRAM riêng) / WiFi / pin / giờ / ngày gửi lên từ máy tính qua USB Serial, vẽ 5 biểu đồ (chart) theo thời gian thực và hiển thị đồng hồ HH:MM ở góc trên-phải màn hình.
 - **Điều khiển bằng encoder**: xoay để tăng/giảm giá trị, nhấn để chuyển màn hình hoặc RUN/STOP.
 - **Nút BOOTSEL rời**: vào chế độ nạp firmware qua USB mà không cần tháo board ra khỏi máy.
@@ -50,7 +50,7 @@ Firmware cho Raspberry Pi Pico điều khiển màn hình TFT ST7789 (240×320),
 | Nút vào BOOTSEL    | 26   |
 | Đèn báo board      | 17   |
 
-SPI0, tốc độ cấu hình 100 kHz trong `setup_pin()` (`PLG_TFT_LCD.cpp`).
+SPI0, tốc độ cấu hình 125 MHz (bị phần cứng RP2040 tự động giới hạn về mức tối đa khả dụng, ~62.5MHz) trong `setup_pin()` (`src/PLG_display.cpp`).
 
 ## Build & nạp firmware
 
@@ -64,13 +64,14 @@ Sau khi build xong sẽ có file `PLG_TFT_LCD.uf2` trong thư mục `build/`. Gi
 
 ## Hành vi khi khởi động
 
-Khi cấp nguồn, Pico chạy `setup()` → `MONITOR_BEGIN()`:
+Khi cấp nguồn, Pico chạy `setup()` → `MONITOR_BEGIN()` (`src/PLG_screens.cpp`):
 
-1. Vẽ logo (`PLG_logo.hpp`) ở giữa màn hình.
-2. Hiển thị chữ "Loading" cùng % chạy từ 0 đến 100.
-3. Sau khi đạt 100%, xoá màn hình về nền trắng và chuyển sang giao diện HOME.
+1. Vẽ logo (`PLG_logo.hpp`) ở giữa màn hình, nền đen.
+2. Hiển thị chữ "Loading" cùng % chạy nhanh từ 0 đến 90%.
+3. Chạy chậm dần từ 90% lên 98% và giữ ở 98%, chờ đến khi nhận được dữ liệu Task Manager thật từ `pc_monitor/monitor.py` qua Serial, hoặc người dùng nhấn nút encoder 2 lần để bỏ qua thủ công.
+4. Chạy nốt lên 100%, xoá màn hình về nền giao diện (`UI_BG`, tối) và chuyển sang giao diện HOME (Task Manager).
 
-Màn hình splash này luôn được giữ nguyên mỗi lần khởi động — không bị bỏ qua hay tắt.
+Màn hình splash này luôn được giữ nguyên mỗi lần khởi động — không bị bỏ qua hay tắt (chỉ đoạn chờ dữ liệu thật ở bước 3 mới có thể bỏ qua bằng nút nhấn).
 
 ## Xem log qua Serial
 
@@ -88,15 +89,14 @@ Các bước xem log:
 
 Log hiện có trong firmware (in qua `printf`, xuất hiện trên Serial Monitor):
 
-- `PLG_end setup` — báo hoàn tất khởi động.
-- `PLG_>>>>>>>>>>>>>>>>>>>` — khi nhấn nút chính, kèm theo trạng thái `status_machine` (RUN/STOP) đổi.
-- `value = %d` — giá trị `battery1` hoặc `funtion_mode` mỗi lần xoay encoder (tuỳ đang ở màn hình nào).
-- `END_INTERRUPS -------->>>` / `END_INTERRUPS <<<--------` — hướng xoay encoder.
-- `PLG_end loop  %d` — thời gian một vòng lặp `loop()` (micro giây), in định kỳ để theo dõi hiệu năng.
+- `PLG_end setup` — báo hoàn tất khởi động (`PLG_TFT_LCD.cpp`).
+- `PLG_end loop  %d` — thời gian tính từ lần in log trước (micro giây), in định kỳ mỗi khi vòng lặp `loop()` đã chạy được hơn 1ms, để theo dõi hiệu năng (`PLG_TFT_LCD.cpp`).
+- `I AM PLG_TFT_LCD_TASKMANAGER` — phản hồi bắt tay khi nhận được `PLG_ID?` từ `monitor.py` (`src/PLG_serial_link.cpp`).
+- `PLG_>>>> back to TASK MANAGER (home)` / `PLG_>>>> enter CLOCK` / `PLG_>>>> exit CLOCK, back to SETTING menu` / `PLG_>>>> enter COLOR` / `PLG_>>>> apply COLOR #%d, back to SETTING menu` — nhấn ngắn nút encoder trong menu SETTING, tuỳ mục đang chọn (`src/PLG_input.cpp`).
 
 ## Gửi thông số PC xuống board
 
-Thư mục `pc_monitor/` chứa script Python chạy trên máy tính, đọc CPU / RAM / GPU (usage 3D + VRAM) / WiFi / pin / giờ / ngày rồi gửi xuống Pico qua cổng USB Serial. Phía firmware (`read_taskmanager_serial()` trong `PLG_TFT_LCD.cpp`) đọc, parse chuỗi này không chặn (non-blocking), đẩy dữ liệu vào biểu đồ (`chart_push`) và cập nhật đồng hồ trên màn hình.
+Thư mục `pc_monitor/` chứa script Python chạy trên máy tính, đọc CPU / RAM / GPU (usage 3D + VRAM) / WiFi / pin / giờ / ngày rồi gửi xuống Pico qua cổng USB Serial. Phía firmware (`read_taskmanager_serial()` trong `src/PLG_serial_link.cpp`) đọc, parse chuỗi này không chặn (non-blocking), đẩy dữ liệu vào biểu đồ (`chart_push`) và cập nhật đồng hồ trên màn hình.
 
 Cài đặt:
 
@@ -114,7 +114,7 @@ python monitor.py --interval 0.5   # đổi tần suất gửi (giây), mặc đ
 python monitor.py --list           # liệt kê các cổng serial hiện có
 ```
 
-**Tự động xác thực thiết bị**: thay vì phải tự chọn đúng cổng COM, script gửi lệnh `PLG_ID?` xuống lần lượt các cổng serial đang cắm (ưu tiên cổng có VID/PID giống Pico trước, sau đó thử các cổng còn lại) và chỉ coi là board hợp lệ khi nhận lại đúng câu trả lời `I AM PLG_TFT_LCD_TASKMANAGER` từ firmware (`read_taskmanager_serial()` xử lý lệnh này trong `PLG_TFT_LCD.cpp`). Nhờ vậy tránh được trường hợp gửi nhầm dữ liệu xuống một thiết bị USB Serial khác có cùng VID/PID (ví dụ Pico khác chạy firmware khác).
+**Tự động xác thực thiết bị**: thay vì phải tự chọn đúng cổng COM, script gửi lệnh `PLG_ID?` xuống lần lượt các cổng serial đang cắm (ưu tiên cổng có VID/PID giống Pico trước, sau đó thử các cổng còn lại) và chỉ coi là board hợp lệ khi nhận lại đúng câu trả lời `I AM PLG_TFT_LCD_TASKMANAGER` từ firmware (`read_taskmanager_serial()` xử lý lệnh này trong `src/PLG_serial_link.cpp`). Nhờ vậy tránh được trường hợp gửi nhầm dữ liệu xuống một thiết bị USB Serial khác có cùng VID/PID (ví dụ Pico khác chạy firmware khác).
 
 Chạy nền (không có terminal tương tác, ví dụ khi đặt vào Startup): script tự dò + tự xác thực, chờ board PLG được cắm vào, đồng thời tự kết nối lại nếu bị rút dây hoặc mất Serial giữa chừng — thời gian kết nối lại sau khi rút/cắm dây thường trong khoảng 10-15 giây (phần lớn là thời gian USB tự nhận diện lại thiết bị, không phải độ trễ của script).
 
@@ -136,15 +136,40 @@ Giá trị CPU/RAM/GPU/GPUMEM/WIFI/BAT là phần trăm (0–100). `GPU` là % s
 
 ## Cấu trúc thư mục
 
+Firmware được chia theo từng tác vụ (module), mỗi module có 1 cặp header (`include/`) + file cài đặt (`src/`):
+
 ```
-PLG_TFT_LCD.cpp                - logic chính (setup/loop, vẽ giao diện, xử lý nút/encoder, đọc Serial)
-PLG_setup.h                    - khai báo chân GPIO, biến trạng thái, cấu hình SPI/TFT
+PLG_TFT_LCD.cpp                - entry point: setup()/loop()/main(), lắp ráp các module lại với nhau
+include/PLG_pins.h             - khai báo chân GPIO + chân SPI tới TFT
+include/PLG_theme.h            - bảng màu giao diện (RGB565) + danh sách màu nhận diện chọn được
+include/PLG_state.h            - toàn bộ biến trạng thái + enum dùng chung giữa các module
+include/PLG_display.h          - instance TFT dùng chung (myTFT) + setup_pin() (khởi tạo GPIO/SPI/màn hình)
+include/PLG_flash_settings.h   - lưu/đọc màu giao diện đã chọn vào flash (giữ lại sau khi mất nguồn)
+include/PLG_serial_link.h      - đọc dữ liệu Task Manager (CPU/RAM/GPU/WIFI/giờ/pin) qua USB Serial
+include/PLG_charts.h           - vẽ biểu đồ dạng đường cho Task Manager
+include/PLG_screens.h          - các màn hình: splash, status bar, Task Manager, menu SETTING, CLOCK, COLOR
+include/PLG_input.h            - xử lý encoder xoay + nút nhấn (ngắn/giữ lâu), chuyển màn hình
+src/*.cpp                      - phần cài đặt tương ứng với từng header ở trên
 PLG_logo.hpp                   - dữ liệu bitmap logo hiển thị lúc khởi động
 PLG_lib/ST7789_TFT_PICO-main/  - thư viện driver màn hình ST7789
 pc_monitor/                    - script Python (PC) gửi CPU/RAM/GPU/WiFi/pin/giờ qua Serial
 CMakeLists.txt                 - cấu hình build Pico SDK
 build/                         - output biên dịch (.uf2, .elf, .hex...), không commit vào git
 ```
+
+Sơ đồ phụ thuộc giữa các module (mũi tên = "include"):
+
+```
+PLG_TFT_LCD.cpp
+   ├─ PLG_display   (myTFT, setup_pin)  ──> PLG_input, PLG_pins
+   ├─ PLG_flash_settings                ──> PLG_theme, PLG_state
+   ├─ PLG_input      (encoder/nút)      ──> PLG_pins, PLG_state, PLG_theme, PLG_display, PLG_flash_settings
+   ├─ PLG_serial_link (đọc Task Manager)──> PLG_state
+   ├─ PLG_charts     (vẽ biểu đồ)       ──> PLG_state, PLG_theme, PLG_display
+   └─ PLG_screens    (các màn hình)     ──> PLG_state, PLG_theme, PLG_pins, PLG_display, PLG_charts, PLG_serial_link
+```
+
+`PLG_state.h` là header trung tâm (không phụ thuộc module nào khác) chứa toàn bộ biến toàn cục và enum, để mọi module có thể chia sẻ trạng thái mà không tạo phụ thuộc vòng.
 
 ## License
 
