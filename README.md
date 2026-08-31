@@ -118,6 +118,14 @@ python monitor.py --list           # liệt kê các cổng serial hiện có
 
 Chạy nền (không có terminal tương tác, ví dụ khi đặt vào Startup): script tự dò + tự xác thực, chờ board PLG được cắm vào, đồng thời tự kết nối lại nếu bị rút dây hoặc mất Serial giữa chừng.
 
+**Dùng bản `.exe` dựng sẵn** (không cần cài Python): tải `PLG_monitor.exe` trong [Releases](../../releases), sau đó chạy trực tiếp — cách dùng và các cờ (`--port`, `--interval`, `--list`) giống hệt `python monitor.py`.
+
+> ⚠️ File tải từ Internet chưa có chữ ký số (code signing certificate), nên Windows sẽ chặn bằng SmartScreen với thông báo "Windows protected your PC". Cách bỏ chặn:
+> - Chuột phải file `.exe` → **Properties** → tick **Unblock** ở cuối tab **General** → **OK**, rồi chạy lại; hoặc
+> - Khi thấy thông báo SmartScreen → bấm **More info** → **Run anyway**.
+>
+> Đây không phải virus, chỉ là do file thực thi chưa được ký số — nếu ngại thao tác này, có thể chạy trực tiếp `python monitor.py` thay vì dùng bản `.exe`.
+
 Mỗi dòng gửi xuống board có dạng:
 
 ```
