@@ -51,6 +51,18 @@ int8_t last_color_index = -1;
 bool show_color = false;
 bool last_show_color = false;
 
+int8_t clock_font_index = 0;
+int8_t last_clock_font_index = -1;
+int8_t active_clock_font = 2; // 2 = SEVEN_SEG (kieu dong ho dien tu), mac dinh
+bool show_font = false;
+bool last_show_font = false;
+
+int8_t clock_size_index = 0;
+int8_t last_clock_size_index = -1;
+int8_t active_clock_size = 6; // co chu lon nhat cua SEVEN_SEG, mac dinh
+bool show_font_size = false;
+bool last_show_font_size = false;
+
 bool menu_needs_full_draw = true;
 
 int8_t chart_cpu[CHART_SAMPLES];

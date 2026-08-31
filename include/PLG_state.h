@@ -65,13 +65,30 @@ extern MONITOR_DESTOP desktop_state;
 #define FUNTION_MODE_MODE 2
 #define FUNTION_MODE_ID 3
 #define FUNTION_MODE_COLOR 4 // chon de vao man hinh chinh mau giao dien (UI_ACCENT)
-#define FUNTION_MODE_TASK 5  // chon de mo man hinh Task Manager (CPU/RAM/GPU/WIFI)
-#define FUNTION_MODE_COUNT 6
+#define FUNTION_MODE_FONT 5  // chon de vao man hinh chon kieu chu so cho dong ho
+#define FUNTION_MODE_TASK 6  // chon de mo man hinh Task Manager (CPU/RAM/GPU/WIFI)
+#define FUNTION_MODE_COUNT 7
 
 extern int8_t color_index;
 extern int8_t last_color_index;
 extern bool show_color;      // true khi dang xem man hinh chinh mau
 extern bool last_show_color;
+
+// Chon kieu chu so cho dong ho gom 2 buoc, giong 1 "wizard": buoc 1 chon HO CHU (5 kieu, xem
+// CLOCK_FONT_FAMILIES trong PLG_screens.cpp), buoc 2 chon CO CHU (size) rieng cho ho chu vua
+// chon (moi ho chu co so co lon nho toi da khac nhau, xem get_clock_size_count/get_clock_size_value).
+#define CLOCK_FONT_COUNT 5
+extern int8_t clock_font_index;      // muc dang duyet trong man hinh chon HO CHU (nhu color_index)
+extern int8_t last_clock_font_index; // -1 khi vua vao/can ve lai toan bo
+extern int8_t active_clock_font;     // ho chu dang duoc ap dung cho dong ho, luu vao flash
+extern bool show_font;               // true khi dang xem man hinh chon HO CHU (buoc 1)
+extern bool last_show_font;
+
+extern int8_t clock_size_index;      // muc (index) dang duyet trong man hinh chon CO CHU (buoc 2)
+extern int8_t last_clock_size_index; // -1 khi vua vao/can ve lai toan bo
+extern int8_t active_clock_size;     // co chu (size) dang duoc ap dung cho dong ho, luu vao flash
+extern bool show_font_size;          // true khi dang xem man hinh chon CO CHU (buoc 2, sau khi da chon HO CHU)
+extern bool last_show_font_size;
 
 extern bool menu_needs_full_draw; // true khi vua vao menu SETTING -> ve lai tat ca
 

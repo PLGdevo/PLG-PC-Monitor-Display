@@ -6,6 +6,7 @@
 #include "PLG_theme.h"
 #include "PLG_display.h"
 #include "PLG_flash_settings.h"
+#include "PLG_screens.h"
 
 // tang/giam gia tri dang duoc dieu khien boi encoder, tuy man hinh hien tai
 static void key_value_tang()
@@ -20,6 +21,10 @@ static void key_value_tang()
     case DESKTOP_SETING:
         if (show_color)
             color_index++;
+        else if (show_font)
+            clock_font_index++;
+        else if (show_font_size)
+            clock_size_index++;
         else
             funtion_mode++;
         break;
@@ -37,6 +42,10 @@ static void key_value_giam()
     case DESKTOP_SETING:
         if (show_color)
             color_index--;
+        else if (show_font)
+            clock_font_index--;
+        else if (show_font_size)
+            clock_size_index--;
         else
             funtion_mode--;
         break;
@@ -121,7 +130,7 @@ void read_button()
             {
                 printf("PLG_>>>> apply COLOR #%d, back to SETTING menu\n\r", color_index);
                 UI_ACCENT = UI_ACCENT_PRESETS[color_index];
-                save_color_to_flash(color_index); // luu lai, mat nguon van giu mau da chon
+                save_settings_to_flash((uint8_t)color_index, (uint8_t)active_clock_font, (uint8_t)active_clock_size); // luu lai, mat nguon van giu mau da chon
                 show_color = false;
                 last_show_color = false; // dong bo lai co, de lan sau vao COLOR duoc xoa man hinh dung cach
                 // buoc ve lai toan bo cac man hinh dung UI_ACCENT
@@ -142,6 +151,31 @@ void read_button()
                     }
                 }
                 show_color = true;
+            }
+            else if (desktop_state == DESKTOP_SETING && show_font_size)
+            {
+                printf("PLG_>>>> apply CLOCK FONT #%d size #%d, back to SETTING menu\n\r", active_clock_font, clock_size_index);
+                active_clock_size = get_clock_size_value(active_clock_font, clock_size_index);
+                save_settings_to_flash((uint8_t)color_index, (uint8_t)active_clock_font, (uint8_t)active_clock_size); // luu lai, mat nguon van giu ho/co chu da chon
+                show_font_size = false;
+                last_show_font_size = false; // dong bo lai co, de lan sau vao man hinh chon size duoc xoa man hinh dung cach
+                menu_needs_full_draw = true;
+            }
+            else if (desktop_state == DESKTOP_SETING && show_font)
+            {
+                printf("PLG_>>>> pick CLOCK FONT FAMILY #%d, choose size next\n\r", clock_font_index);
+                active_clock_font = clock_font_index;
+                // khoi tao vi tri duyet buoc 2 tu size dang dung, kep an toan trong khoang hop le cua ho chu vua chon
+                clock_size_index = clock_size_value_to_index(active_clock_font, active_clock_size);
+                show_font = false;
+                last_show_font = false; // dong bo lai co, de lan sau vao man hinh chon ho chu duoc xoa man hinh dung cach
+                show_font_size = true;  // chuyen sang buoc 2: chon co chu
+            }
+            else if (desktop_state == DESKTOP_SETING && funtion_mode == FUNTION_MODE_FONT)
+            {
+                printf("PLG_>>>> enter FONT (step 1: choose family)\n\r");
+                clock_font_index = active_clock_font; // bat dau duyet tu ho chu dang dung
+                show_font = true;
             }
         }
     }
@@ -175,6 +209,8 @@ void DISPLAY_ROLL()
             menu_needs_full_draw = true; // buoc ve lai toan bo menu 1 lan khi vao SETTING
             show_clock = false;          // luon vao menu truoc, khong vao thang man hinh dong ho
             show_color = false;          // luon vao menu truoc, khong vao thang man hinh chon mau
+            show_font = false;           // luon vao menu truoc, khong vao thang man hinh chon ho chu
+            show_font_size = false;      // luon vao menu truoc, khong vao thang man hinh chon co chu
 
             // xoa gio Task Manager o goc tren-phai khi roi HOME, tranh no bi dinh lai
             // (khong duoc xoa) tren cac man hinh khac nhu SETTING/CLOCK

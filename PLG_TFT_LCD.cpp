@@ -35,7 +35,7 @@ void live_pico()
 void setup()
 {
     setup_pin();
-    load_color_from_flash(); // khoi phuc mau da chon lan truoc (neu co)
+    load_settings_from_flash(); // khoi phuc mau + kieu chu dong ho da chon lan truoc (neu co)
     // -1 = "chua co du lieu that" (xem giai thich o PLG_state.h canh khai bao chart_cpu...)
     memset(chart_cpu, -1, CHART_SAMPLES);
     memset(chart_ram, -1, CHART_SAMPLES);
@@ -67,6 +67,10 @@ void loop()
             MONITOR_CLOCK();
         else if (show_color)
             MONITOR_COLOR();
+        else if (show_font)
+            MONITOR_FONT();
+        else if (show_font_size)
+            MONITOR_FONT_SIZE();
         else
             MONITOR_FUNTION();
         break;

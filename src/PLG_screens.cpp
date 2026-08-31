@@ -215,18 +215,20 @@ void MONITOR_TASKMANAGER()
 // vi tri + kich thuoc 1 dong trong menu SETTING, tinh 1 lan dung chung cho ve khung
 // va cho cap nhat khi doi lua chon (rowH/rowGap nho lai de FUNTION_MODE_COUNT dong
 // deu vua man hinh, khong bi tran ra ngoai / bi den do ve qua vung hien thi)
-static const int16_t MENU_ROW_X = 55, MENU_ROW_W = 220, MENU_ROW_H = 28, MENU_ROW_GAP = 4, MENU_START_Y = 26;
+// H/GAP giam so voi truoc (28/4 -> 24/3) de 7 dong (them "FONT") van vua man hinh: tong cao
+// 7*24+6*3=186px, bat dau tu y=26 -> ket thuc y=212, van duoi nguong 240 (24+216) cua vung noi dung
+static const int16_t MENU_ROW_X = 55, MENU_ROW_W = 220, MENU_ROW_H = 24, MENU_ROW_GAP = 3, MENU_START_Y = 26;
 
 static void draw_menu_row(int8_t i, bool selected)
 {
-    const char *labels[FUNTION_MODE_COUNT] = {"PLAYER", "FUNTION", "MODE", "CLOCK", "COLOR", "TASK"};
+    const char *labels[FUNTION_MODE_COUNT] = {"PLAYER", "FUNTION", "MODE", "CLOCK", "COLOR", "FONT", "TASK"};
     int16_t rowY = MENU_START_Y + i * (MENU_ROW_H + MENU_ROW_GAP);
     uint16_t bg = selected ? UI_PANEL_HI : UI_PANEL;
     uint16_t border = selected ? UI_ACCENT : UI_BORDER;
     uint16_t fg = selected ? UI_ACCENT : UI_TEXT_DIM;
     myTFT.TFTfillRoundRect(MENU_ROW_X, rowY, MENU_ROW_W, MENU_ROW_H, 4, bg);
     myTFT.TFTdrawRoundRect(MENU_ROW_X, rowY, MENU_ROW_W, MENU_ROW_H, 4, border);
-    myTFT.TFTdrawText(MENU_ROW_X + 15, rowY + 7, (char *)labels[i], fg, bg, 2);
+    myTFT.TFTdrawText(MENU_ROW_X + 15, rowY + 4, (char *)labels[i], fg, bg, 2); // (rowH-textH)/2 = (24-16)/2=4
 }
 
 void MONITOR_FUNTION()
@@ -258,29 +260,131 @@ void MONITOR_FUNTION()
 }
 
 /*------------------- Man hinh dong ho -------------------*/
-// Kich thuoc + vi tri chu gio "HH:MM:SS" (8 ky tu). Dung size5 (to hon size4 truoc day) de de
-// nhin hon tu xa; moi ky tu rong size*(5+1)=30px, cao size*8=40px, tong rong 8*30=240px
-// -> can giua: x=(320-240)/2=40. Vi tri ky tu cuoi (idx7): 40+7*30=250, van duoi nguong 255
-// cua con tro X kieu uint8_t trong TFTdrawChar (goi tu ben trong TFTdrawText/o day), an toan.
-static const int16_t TIME_SIZE = 5;
-static const int16_t TIME_CHAR_W = TIME_SIZE * (5 + 1);
-static const int16_t TIME_CHAR_H = TIME_SIZE * 8;
-static const int16_t TIME_LEN = 8; // "HH:MM:SS"
-static const int16_t TIME_X = (320 - TIME_LEN * TIME_CHAR_W) / 2;
-static const int16_t TIME_Y = 95;
+// 5 HO CHU (font family) co the chon cho dong ho, chon theo 2 buoc trong SETTING > FONT:
+// buoc 1 chon ho chu (CLOCK_FONT_COUNT o PLG_state.h), buoc 2 chon co chu (size) rieng cho ho
+// do. Deu la font co ban (1-6) cua thu vien, ho tro phong to tuy y qua tham so size cua
+// TFTdrawChar - khac voi Bignum/Mednum (font 7-8) chi co 1 kich thuoc co dinh, khong scale duoc.
+// CLOCK_FONT_MAX_SIZE gioi han rieng cho tung ho de 8 ky tu "HH:MM:SS" luon vua man hinh rong
+// 320px (size*(baseW+1)*8 <= 320).
+static const char *CLOCK_FONT_NAMES[CLOCK_FONT_COUNT] = {"DEFAULT", "THICK", "7-SEGMENT", "WIDE", "HOMESPUN"};
+static const int16_t CLOCK_FONT_BASE_W[CLOCK_FONT_COUNT] = {5, 7, 4, 8, 7};
+static const int8_t CLOCK_FONT_MAX_SIZE[CLOCK_FONT_COUNT] = {6, 5, 6, 4, 5};
+// co chu nho nhat cho phep chon (duoi muc nay chu qua nho, kho doc tren man 240x320)
+static const int8_t CLOCK_FONT_MIN_SIZE = 2;
 
-// xoa + ve lai DUNG 1 ky tu gio tai vi tri idx. Cap nhat tung ky tu thay vi ca chuoi giup hieu
-// ung doi giay muot hon: da so lan cap nhat chi doi 1-2 ky tu cuoi (giay), cac ky tu khac
-// (gio/phut/dau ':') dung nguyen tren man hinh, khong bi chop lai toan bo dong chu moi giay.
-static void draw_time_char(int idx, char c)
+static int8_t clamp_clock_size(int8_t style, int8_t size)
 {
-    int16_t x = TIME_X + idx * TIME_CHAR_W;
-    myTFT.TFTfillRect(x, TIME_Y, TIME_CHAR_W, TIME_CHAR_H, UI_BG);
-    myTFT.TFTdrawChar(x, TIME_Y, (uint8_t)c, UI_ACCENT, UI_BG, TIME_SIZE);
+    if (size < CLOCK_FONT_MIN_SIZE)
+        return CLOCK_FONT_MIN_SIZE;
+    if (size > CLOCK_FONT_MAX_SIZE[style])
+        return CLOCK_FONT_MAX_SIZE[style];
+    return size;
+}
+// so muc co chu co the chon cho 1 ho chu, va gia tri size thuc te ung voi 1 muc (index)
+static int8_t get_clock_size_count(int8_t style) { return CLOCK_FONT_MAX_SIZE[style] - CLOCK_FONT_MIN_SIZE + 1; }
+// khong static: PLG_input.cpp can goi khi ap dung lua chon size (xem PLG_screens.h)
+int8_t get_clock_size_value(int8_t style, int8_t index) { return clamp_clock_size(style, (int8_t)(CLOCK_FONT_MIN_SIZE + index)); }
+// tra ve index (0-based) ung voi 1 gia tri size cho truoc, dung de khoi tao lai vi tri duyet
+// trong man hinh chon CO CHU tu gia tri active_clock_size hien tai (xem PLG_input.cpp)
+int8_t clock_size_value_to_index(int8_t style, int8_t sizeValue)
+{
+    return (int8_t)(clamp_clock_size(style, sizeValue) - CLOCK_FONT_MIN_SIZE);
 }
 
-// man hinh dong ho: hien gio + ngay hien tai (nhan tu monitor.py qua serial, truong TIME/DATE)
-// giao dien toi gian: chi 2 dong chu can giua, khong khung khong tieu de
+// kich thuoc 1 ky tu ("HH:MM:SS") theo ho chu + co chu, dung chung cho ve dong ho va xem truoc
+static void get_clock_char_metrics(int8_t style, int8_t size, int16_t &charW, int16_t &charH)
+{
+    int8_t s = clamp_clock_size(style, size);
+    charW = s * (CLOCK_FONT_BASE_W[style] + 1);
+    charH = s * 8;
+}
+
+// ve 1 ky tu gio tai (x,y) theo ho chu + co chu. Chuyen font roi tra ve font mac dinh ngay sau
+// do vi TFTFontNum() la trang thai dung chung toan bo thu vien - cac man hinh/dong khac (status
+// bar, ngay, menu, AM/PM...) deu gia dinh dang o font mac dinh.
+static void draw_clock_font_char(int8_t style, int8_t size, int16_t x, int16_t y, char c)
+{
+    switch (style)
+    {
+    case 1:
+        myTFT.TFTFontNum(myTFT.TFTFont_Thick);
+        break;
+    case 2:
+        myTFT.TFTFontNum(myTFT.TFTFont_Seven_Seg);
+        break;
+    case 3:
+        myTFT.TFTFontNum(myTFT.TFTFont_Wide);
+        break;
+    case 4:
+        myTFT.TFTFontNum(myTFT.TFTFont_HomeSpun);
+        break;
+    default:
+        myTFT.TFTFontNum(myTFT.TFTFont_Default);
+        break;
+    }
+    myTFT.TFTdrawChar(x, y, (uint8_t)c, UI_ACCENT, UI_BG, clamp_clock_size(style, size));
+    myTFT.TFTFontNum(myTFT.TFTFont_Default);
+}
+
+static const int16_t TIME_LEN = 8; // "HH:MM:SS"
+// Neo tren cua khoi gio, chon du thap de ho/co chu lon nhat co the chon (48px cao) + dong AM/PM
+// + dong ngay ben duoi van vua vung noi dung (y=24..240) - xem cach tinh dateY trong MONITOR_CLOCK.
+static const int16_t TIME_Y = 60;
+
+// xoa + ve lai DUNG 1 ky tu gio tai vi tri idx, theo ho/co chu dang ap dung
+// (active_clock_font/active_clock_size). Cap nhat tung ky tu (thay vi ca chuoi) giup hieu ung
+// doi giay muot hon: da so lan chi doi 1-2 ky tu cuoi (giay), cac ky tu khac (gio/phut/dau ':')
+// dung nguyen, khong chop lai ca dong.
+static void draw_time_char(int idx, char c)
+{
+    int16_t charW, charH;
+    get_clock_char_metrics(active_clock_font, active_clock_size, charW, charH);
+    int16_t x = (320 - TIME_LEN * charW) / 2 + idx * charW;
+    myTFT.TFTfillRect(x, TIME_Y, charW, charH, UI_BG);
+    draw_clock_font_char(active_clock_font, active_clock_size, x, TIME_Y, c);
+}
+
+// chuyen "HH:MM:SS" 24h (tu monitor.py) sang hien thi 12h + co AM/PM; MM:SS giu nguyen.
+// out12 phai cung do dai voi in24 (9 byte, 8 ky tu + '\0').
+static void format_time_12h(const char *in24, char *out12, bool *isPM)
+{
+    int hh = (in24[0] - '0') * 10 + (in24[1] - '0');
+    *isPM = (hh >= 12);
+    int hh12 = hh % 12;
+    if (hh12 == 0)
+        hh12 = 12;
+    out12[0] = '0' + (hh12 / 10);
+    out12[1] = '0' + (hh12 % 10);
+    strncpy(out12 + 2, in24 + 2, 6); // ":MM:SS" (6 ky tu) giu nguyen tu chuoi goc
+    out12[8] = '\0';
+}
+
+// nhan AM/PM can giua ngay duoi chu gio (khong dat ben phai): voi cac ho chu rong (vd WIDE),
+// dat ben phai se day x qua nguong 255 cua con tro X kieu uint8_t trong TFTdrawText, khien nhan
+// bi tran so va ve sai vi tri (nhay ve gan le trai man hinh) - dat o giua ben duoi tranh duoc
+// van de nay cho moi ho/co chu, dong thoi don gian va can doi hon.
+// Chi ve lai khi doi giua AM/PM (2 lan/ngay) - dung tri-state (-1 = chua ve) de ep ve lai lan dau.
+static int8_t last_ampm_shown = -1;
+static void draw_ampm(bool isPM)
+{
+    int8_t val = isPM ? 1 : 0;
+    if (val == last_ampm_shown)
+        return;
+    last_ampm_shown = val;
+
+    int16_t charW, charH;
+    get_clock_char_metrics(active_clock_font, active_clock_size, charW, charH);
+    int16_t y = TIME_Y + charH + 4;
+    const int16_t ampmW = 2 * 2 * (5 + 1); // size2, 2 ky tu ("AM"/"PM")
+    int16_t x = (320 - ampmW) / 2;
+
+    myTFT.TFTfillRect(0, y, 320, 20, UI_BG);
+    myTFT.TFTdrawText(x, y, (char *)(isPM ? "PM" : "AM"), UI_ACCENT, UI_BG, 2);
+}
+
+// man hinh dong ho: hien gio (12h + AM/PM) + ngay hien tai (nhan tu monitor.py qua serial,
+// truong TIME/DATE). Gio ve theo ho/co chu dang chon trong SETTING > FONT
+// (active_clock_font/active_clock_size).
 void MONITOR_CLOCK()
 {
     MONITOR_STATUS();
@@ -293,31 +397,133 @@ void MONITOR_CLOCK()
         // (so/':') de vong lap so sanh tung ky tu ben duoi bat buoc ve lai TOAN BO 8 ky tu ngay
         // sau khi man hinh vua bi xoa trang - strcpy("") chi dat byte dau ve 0, cac byte con lai
         // van giu gia tri cu va co the trung voi gio hien tai, khien ky tu do bi bo qua (khong
-        // ve lai) va de trong mot khoang den tren man hinh.
+        // ve lai) va de trong mot khoang den tren man hinh. Dieu nay cung xoa sach vung gio cu
+        // neu nguoi dung vua doi kieu chu (kich thuoc ky tu khac nhau giua cac kieu).
         memset(last_time_str, 0, sizeof(last_time_str));
+        last_ampm_shown = -1;
         strcpy(last_date_str, "");
         clock_dirty = true;
     }
 
     if (clock_dirty)
     {
+        char display_time[9];
+        bool isPM;
+        format_time_12h(current_time_str, display_time, &isPM);
+
         for (int i = 0; i < TIME_LEN; i++)
         {
-            if (last_time_str[i] != current_time_str[i])
-                draw_time_char(i, current_time_str[i]);
+            if (last_time_str[i] != display_time[i])
+                draw_time_char(i, display_time[i]);
         }
-        strcpy(last_time_str, current_time_str);
+        strcpy(last_time_str, display_time);
+        draw_ampm(isPM);
 
         if (strcmp(last_date_str, current_date_str) != 0)
         {
-            myTFT.TFTfillRect(0, 155, 320, 25, UI_BG);
+            // vi tri dong ngay phu thuoc chieu cao ky tu gio (charH thay doi theo ho/co chu) -
+            // tinh dong de khong bi dong AM/PM de len khi dung co chu lon nhat (cao nhat)
+            int16_t charW, charH;
+            get_clock_char_metrics(active_clock_font, active_clock_size, charW, charH);
+            int16_t dateY = TIME_Y + charH + 4 /*gap den AM/PM*/ + 20 /*cao dong AM/PM*/ + 8 /*gap*/;
+
+            myTFT.TFTfillRect(0, dateY, 320, 25, UI_BG);
             // x=70 de can giua "DD/MM/YYYY" (10 ky tu, size 3 -> rong ~177px tren man 320px).
             // Khong duoc dat x qua ~90: TFTdrawText dung con tro X kieu uint8_t, neu x + do rong
             // vuot qua 255 no se tran so va ky tu cuoi nhay ve sat le trai man hinh.
-            myTFT.TFTdrawText(70, 158, current_date_str, UI_TEXT_DIM, UI_BG, 3);
+            myTFT.TFTdrawText(70, dateY + 3, current_date_str, UI_TEXT_DIM, UI_BG, 3);
             strcpy(last_date_str, current_date_str);
         }
         clock_dirty = false;
+    }
+}
+
+/*------------------- Man hinh chon HO CHU / CO CHU cho dong ho (2 buoc) -------------------*/
+// xem truoc 1 mau gio co dinh ("12:34:56") theo ho chu style + co chu size, can giua man hinh
+static void draw_clock_font_sample(int8_t style, int8_t size)
+{
+    const char *sample = "12:34:56";
+    int16_t charW, charH;
+    get_clock_char_metrics(style, size, charW, charH);
+    int16_t x = (320 - TIME_LEN * charW) / 2;
+    for (int i = 0; sample[i] != '\0'; i++)
+    {
+        draw_clock_font_char(style, size, x + i * charW, 70, sample[i]);
+    }
+}
+
+// co chu dung de xem truoc o buoc 1 (chon HO CHU): co dinh, du nho de an toan voi moi ho chu
+// (nho nhat trong CLOCK_FONT_MAX_SIZE la 4 - WIDE) -> chon 3 de con chenh lech voi min-size(2)
+static const int8_t CLOCK_FONT_PREVIEW_SIZE = 3;
+
+// buoc 1/2: dung encoder duyet qua 5 HO CHU (xem truoc mau gio "12:34:56" o co chu co dinh),
+// nhan nut de chuyen sang buoc 2 chon CO CHU. Cau truc tuong tu MONITOR_COLOR.
+void MONITOR_FONT()
+{
+    MONITOR_STATUS();
+
+    clock_font_index = (int8_t)(((clock_font_index % CLOCK_FONT_COUNT) + CLOCK_FONT_COUNT) % CLOCK_FONT_COUNT);
+
+    if (last_show_font != show_font)
+    {
+        last_show_font = show_font;
+        myTFT.TFTfillRect(0, 24, 320, 216, UI_BG);
+        last_clock_font_index = -1;
+    }
+
+    if (last_clock_font_index != clock_font_index)
+    {
+        last_clock_font_index = clock_font_index;
+
+        // vung xem truoc thay doi kich thuoc theo tung ho chu -> xoa ca vung roi ve lai mau +
+        // ten kieu; day la man hinh cai dat, chon it thay doi, chop nhe luc doi ho chu la chap nhan duoc
+        myTFT.TFTfillRect(0, 40, 320, 130, UI_BG);
+
+        draw_clock_font_sample(clock_font_index, CLOCK_FONT_PREVIEW_SIZE);
+
+        const char *name = CLOCK_FONT_NAMES[clock_font_index];
+        int16_t nameW = (int16_t)strlen(name) * 3 * (5 + 1); // size3
+        myTFT.TFTdrawText((320 - nameW) / 2, 130, (char *)name, UI_ACCENT, UI_BG, 3);
+
+        // "Nhan nut de chon co chu" 23 ky tu, size1 -> 6px/ky tu, rong 138px -> x=(320-138)/2=91
+        myTFT.TFTdrawText(91, 155, (char *)"Nhan nut de chon co chu", UI_TEXT_DIM, UI_BG, 1);
+    }
+}
+
+// buoc 2/2: dung encoder duyet qua cac co chu (size) hop le cua HO CHU da chon o buoc 1 (xem
+// truoc mau gio "12:34:56" dung dung co chu dang duyet), nhan nut de ap dung ca hai (luu flash)
+// va quay lai menu SETTING.
+void MONITOR_FONT_SIZE()
+{
+    MONITOR_STATUS();
+
+    int8_t sizeCount = get_clock_size_count(active_clock_font);
+    clock_size_index = (int8_t)(((clock_size_index % sizeCount) + sizeCount) % sizeCount);
+
+    if (last_show_font_size != show_font_size)
+    {
+        last_show_font_size = show_font_size;
+        myTFT.TFTfillRect(0, 24, 320, 216, UI_BG);
+        last_clock_size_index = -1;
+    }
+
+    if (last_clock_size_index != clock_size_index)
+    {
+        last_clock_size_index = clock_size_index;
+        int8_t size = get_clock_size_value(active_clock_font, clock_size_index);
+
+        // vung xem truoc thay doi kich thuoc theo tung co chu -> xoa ca vung roi ve lai mau + nhan size
+        myTFT.TFTfillRect(0, 40, 320, 130, UI_BG);
+
+        draw_clock_font_sample(active_clock_font, size);
+
+        char sizeLabel[10];
+        snprintf(sizeLabel, sizeof(sizeLabel), "Size %d", size);
+        int16_t labelW = (int16_t)strlen(sizeLabel) * 3 * (5 + 1); // size3
+        myTFT.TFTdrawText((320 - labelW) / 2, 130, sizeLabel, UI_ACCENT, UI_BG, 3);
+
+        // "Nhan nut de ap dung" 19 ky tu, size1 -> 6px/ky tu, rong 114px -> x=(320-114)/2=103
+        myTFT.TFTdrawText(103, 155, (char *)"Nhan nut de ap dung", UI_TEXT_DIM, UI_BG, 1);
     }
 }
 
