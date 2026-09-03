@@ -228,17 +228,18 @@ void MONITOR_TASKMANAGER()
         last_desktop = desktop;
         taskmanager_dirty = true;
         reset_taskmanager_clock_cache(); // buoc ve lai gio sau khi xoa man hinh
+        reset_chart_cache();              // buoc 5 chart ve lai (man hinh vua bi xoa trang)
     }
 
     if (taskmanager_dirty)
     {
-        draw_chart_data(c[0].x, c[0].y, c[0].w, c[0].h, "CPU", chart_cpu, UI_CPU);
-        draw_chart_data(c[1].x, c[1].y, c[1].w, c[1].h, "RAM", chart_ram, UI_RAM, 90, "BOOST NOW");
-        draw_chart_data(c[2].x, c[2].y, c[2].w, c[2].h, "GPU", chart_gpu, UI_GPU);
+        draw_chart_data(c[0].x, c[0].y, c[0].w, c[0].h, "CPU", chart_cpu, UI_CPU, 101, nullptr, 0);
+        draw_chart_data(c[1].x, c[1].y, c[1].w, c[1].h, "RAM", chart_ram, UI_RAM, 90, "BOOST NOW", 1);
+        draw_chart_data(c[2].x, c[2].y, c[2].w, c[2].h, "GPU", chart_gpu, UI_GPU, 101, nullptr, 2);
         // "MEM" (3 ky tu, khong phai "VRAM" 4 ky tu): o khung ben phai (x~164) TFTdrawText dung
         // con tro X kieu uint8_t (toi da 255) - nhan dai hon 1 ky tu la du lam tran/wrap ve dau man hinh
-        draw_chart_data(c[3].x, c[3].y, c[3].w, c[3].h, "MEM", chart_gpumem, UI_GPUMEM);
-        draw_chart_data(c[4].x, c[4].y, c[4].w, c[4].h, "WIFI", chart_wifi, UI_WIFI);
+        draw_chart_data(c[3].x, c[3].y, c[3].w, c[3].h, "MEM", chart_gpumem, UI_GPUMEM, 101, nullptr, 3);
+        draw_chart_data(c[4].x, c[4].y, c[4].w, c[4].h, "WIFI", chart_wifi, UI_WIFI, 101, nullptr, 4);
 
         taskmanager_dirty = false;
     }

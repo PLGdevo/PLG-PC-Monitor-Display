@@ -1,5 +1,6 @@
 #include "PLG_charts.h"
 #include <stdio.h>
+#include <string.h>
 #include "PLG_state.h"
 #include "PLG_theme.h"
 #include "PLG_display.h"
@@ -25,9 +26,30 @@ void draw_chart_frame(int16_t x, int16_t y, int16_t w, int16_t h)
     myTFT.TFTdrawRoundRect(x, y, w, h, 4, UI_BORDER);
 }
 
-void draw_chart_data(int16_t x, int16_t y, int16_t w, int16_t h, const char *label, int8_t *buf, uint16_t lineColor,
-                      int warnAt, const char *warnText)
+// luu buf da ve lan truoc cho toi da 5 chart (CPU/RAM/GPU/GPUMEM/WIFI) de phat hien "khong doi
+// gi ca" va bo qua hoan toan lan ve do (xem draw_chart_data) - -2 (ngoai khoang hop le -1..100)
+// danh dau "chua ve lan nao" nen lan dau luon ve du chartId gi.
+static int8_t last_drawn_buf[5][CHART_SAMPLES];
+static bool last_drawn_valid[5] = {false, false, false, false, false};
+
+void reset_chart_cache()
 {
+    for (int i = 0; i < 5; i++)
+        last_drawn_valid[i] = false;
+}
+
+void draw_chart_data(int16_t x, int16_t y, int16_t w, int16_t h, const char *label, int8_t *buf, uint16_t lineColor,
+                      int warnAt, const char *warnText, int8_t chartId)
+{
+    bool haveCache = (chartId >= 0 && chartId < 5);
+    if (haveCache && last_drawn_valid[chartId] && memcmp(last_drawn_buf[chartId], buf, CHART_SAMPLES) == 0)
+        return; // du lieu giong het lan ve truoc -> bo qua, tranh chop hinh khong can thiet
+    if (haveCache)
+    {
+        memcpy(last_drawn_buf[chartId], buf, CHART_SAMPLES);
+        last_drawn_valid[chartId] = true;
+    }
+
     int16_t plotTop = y + 20; // chua cho nhan chu phia tren
     int16_t plotBottom = y + h - 4;
     int16_t plotH = plotBottom - plotTop;
@@ -55,8 +77,9 @@ void draw_chart_data(int16_t x, int16_t y, int16_t w, int16_t h, const char *lab
         int16_t x1 = x + 4 + ((i + 1) * (w - 8)) / (CHART_SAMPLES - 1);
         int16_t y0 = plotBottom - (buf[i] * plotH) / 100;
         int16_t y1 = plotBottom - (buf[i + 1] * plotH) / 100;
+        // 1 net (khong ve chong 2px nhu truoc) - giam mot nua so lan goi ve line moi lan cap
+        // nhat, ve nhanh hon -> bot chop hinh (thay bang 1 diem tron nho o cuoi cho de nhin)
         myTFT.TFTdrawLine(x0, y0, x1, y1, lineColor);
-        myTFT.TFTdrawLine(x0, y0 + 1, x1, y1 + 1, lineColor); // net day 2px cho de nhin
     }
 
     if (last_val >= 0)
