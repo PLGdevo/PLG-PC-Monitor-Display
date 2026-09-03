@@ -65,6 +65,12 @@ bool last_show_font_size = false;
 
 bool menu_needs_full_draw = true;
 
+int8_t ui_language = UI_LANG_VI;
+int8_t language_index = 0;
+int8_t last_language_index = -1;
+bool show_language = false;
+bool last_show_language = false;
+
 int8_t chart_cpu[CHART_SAMPLES];
 int8_t chart_ram[CHART_SAMPLES];
 int8_t chart_gpu[CHART_SAMPLES];

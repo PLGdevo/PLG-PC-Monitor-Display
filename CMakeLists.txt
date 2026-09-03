@@ -37,6 +37,7 @@ add_executable(PLG_TFT_LCD
     src/PLG_charts.cpp
     src/PLG_screens.cpp
     src/PLG_input.cpp
+    src/PLG_lang.cpp
 
     PLG_lib/ST7789_TFT_PICO-main/src/st7789/ST7789_TFT.cpp
     PLG_lib/ST7789_TFT_PICO-main/src/st7789/ST7789_TFT_graphics.cpp

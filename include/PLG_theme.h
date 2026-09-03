@@ -13,6 +13,7 @@ extern const uint16_t UI_PANEL_HI;   // khung dang chon
 extern const uint16_t UI_BORDER;     // vien
 extern const uint16_t UI_TEXT;       // chu chinh
 extern const uint16_t UI_TEXT_DIM;   // chu phu
+extern const uint16_t UI_TEXT_FAINT; // chu rat mo (vd cac muc khong duoc chon trong carousel SETTING)
 extern uint16_t UI_ACCENT;           // mau nhan dien, chinh duoc trong SETTING > COLOR
 extern const uint16_t UI_DANGER;     // canh bao / mat ket noi
 

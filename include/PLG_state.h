@@ -67,7 +67,8 @@ extern MONITOR_DESTOP desktop_state;
 #define FUNTION_MODE_COLOR 4 // chon de vao man hinh chinh mau giao dien (UI_ACCENT)
 #define FUNTION_MODE_FONT 5  // chon de vao man hinh chon kieu chu so cho dong ho
 #define FUNTION_MODE_TASK 6  // chon de mo man hinh Task Manager (CPU/RAM/GPU/WIFI)
-#define FUNTION_MODE_COUNT 7
+#define FUNTION_MODE_LANGUAGE 7 // chon de mo man hinh doi ngon ngu giao dien (VI/EN)
+#define FUNTION_MODE_COUNT 8
 
 extern int8_t color_index;
 extern int8_t last_color_index;
@@ -91,6 +92,16 @@ extern bool show_font_size;          // true khi dang xem man hinh chon CO CHU (
 extern bool last_show_font_size;
 
 extern bool menu_needs_full_draw; // true khi vua vao menu SETTING -> ve lai tat ca
+
+/*------------------- Ngon ngu giao dien (VI/EN) -------------------*/
+#define UI_LANG_VI 0
+#define UI_LANG_EN 1
+#define UI_LANG_COUNT 2
+extern int8_t ui_language;         // ngon ngu dang ap dung cho toan bo giao dien, luu vao flash
+extern int8_t language_index;      // muc dang duyet trong man hinh chon ngon ngu (nhu color_index)
+extern int8_t last_language_index; // -1 khi vua vao/can ve lai toan bo
+extern bool show_language;         // true khi dang xem man hinh chon ngon ngu
+extern bool last_show_language;
 
 /*------------------- PC Task Manager chart (nhan tu pc_monitor/monitor.py) -------------------*/
 // dinh dang du lieu nhan qua USB serial: "CPU:<int>;RAM:<int>;GPU:<int>;GPUMEM:<int>;WIFI:<int>;TIME:..;DATE:..;BAT:<int>\n"

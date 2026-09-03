@@ -8,6 +8,7 @@
 #include "PLG_display.h"
 #include "PLG_charts.h"
 #include "PLG_serial_link.h"
+#include "PLG_lang.h"
 #include "PLG_logo.hpp"
 
 void drawLogoFull(int16_t x, int16_t y, int16_t w, int16_t h, const uint16_t *img)
@@ -123,6 +124,28 @@ static void draw_battery(int16_t iconX, int16_t textX, int8_t &value, int8_t &la
     }
 }
 
+// icon banh rang (settings): dich sat gan goc phai tren cung (truoc icon ket noi bat dau x288,
+// chua r=7+2 rang(3px) cua icon nen dat cx=272 de khong de len icon ket noi), chi hien khi dang
+// o trong SETTING (moi man hinh con nhu COLOR/FONT/LANGUAGE/TASK deu giu nguyen
+// desktop_state == DESKTOP_SETING nen icon luon hien xuyen suot)
+static const int16_t GEAR_CX = 272, GEAR_CY = 12;
+static bool last_settings_icon_shown = false;
+
+static void draw_gear_icon(int16_t cx, int16_t cy, uint16_t color)
+{
+    myTFT.TFTfillCircle(cx, cy, 7, color);
+    myTFT.TFTfillCircle(cx, cy, 3, UI_BG); // lo tron giua banh rang
+    // 8 rang nho quanh vien (goc N/S/E/W + 4 goc cheo), toa do co dinh, khong dung luong giac
+    myTFT.TFTfillRect(cx - 1, cy - 9, 3, 3, color);
+    myTFT.TFTfillRect(cx - 1, cy + 6, 3, 3, color);
+    myTFT.TFTfillRect(cx - 9, cy - 1, 3, 3, color);
+    myTFT.TFTfillRect(cx + 6, cy - 1, 3, 3, color);
+    myTFT.TFTfillRect(cx - 6, cy - 6, 3, 3, color);
+    myTFT.TFTfillRect(cx + 4, cy - 6, 3, 3, color);
+    myTFT.TFTfillRect(cx - 6, cy + 4, 3, 3, color);
+    myTFT.TFTfillRect(cx + 4, cy + 4, 3, 3, color);
+}
+
 void MONITOR_STATUS()
 {
     if (last_status != status)
@@ -133,6 +156,15 @@ void MONITOR_STATUS()
 
     draw_battery(20, 60, battery1, last_battery1);   // pin remote
     draw_battery(100, 140, battery2, last_battery2); // pin may
+
+    bool showGear = (desktop_state == DESKTOP_SETING);
+    if (showGear != last_settings_icon_shown)
+    {
+        myTFT.TFTfillRect(GEAR_CX - 10, 0, 20, 22, UI_BG);
+        if (showGear)
+            draw_gear_icon(GEAR_CX, GEAR_CY, UI_ACCENT);
+        last_settings_icon_shown = showGear;
+    }
 
     /*---------------------status connected------------------------------*/
     if (LAST_CONNECT_STATUS != CONNECT_STATUS)
@@ -162,6 +194,10 @@ void reset_taskmanager_clock_cache()
 {
     strcpy(last_time_str_top, "");
 }
+
+// khai bao truoc: dung trong draw_clock_cpu_ram (dinh nghia ben duoi, sau get_clock_char_metrics)
+void reset_clock_cpu_ram_cache();
+static void draw_clock_cpu_ram();
 
 static void draw_taskmanager_clock()
 {
@@ -211,24 +247,88 @@ void MONITOR_TASKMANAGER()
     draw_taskmanager_clock();
 }
 
-/*------------------- Menu SETTING -------------------*/
-// vi tri + kich thuoc 1 dong trong menu SETTING, tinh 1 lan dung chung cho ve khung
-// va cho cap nhat khi doi lua chon (rowH/rowGap nho lai de FUNTION_MODE_COUNT dong
-// deu vua man hinh, khong bi tran ra ngoai / bi den do ve qua vung hien thi)
-// H/GAP giam so voi truoc (28/4 -> 24/3) de 7 dong (them "FONT") van vua man hinh: tong cao
-// 7*24+6*3=186px, bat dau tu y=26 -> ket thuc y=212, van duoi nguong 240 (24+216) cua vung noi dung
-static const int16_t MENU_ROW_X = 55, MENU_ROW_W = 220, MENU_ROW_H = 24, MENU_ROW_GAP = 3, MENU_START_Y = 26;
+/*------------------- Menu SETTING (dang "wheel/carousel" cuon doc) -------------------*/
+// 5 "khe" hien thi cung luc quanh muc dang chon: khe giua (dang chon) to nhat + noi bat, 2 khe ke
+// nho hon, 2 khe ngoai cung chi la chu mo nhat (gia cam giac banh xe cuon). Danh sach cuon vong
+// (FUNTION_MODE_COUNT muc), nen moi lan doi muc phai ve lai toan bo 5 khe (khac voi menu dang list
+// cu chi can ve lai 2 dong) vi noi dung TUNG khe deu doi theo huong cuon.
+// to hon ban dau (size 1/2/3 -> 2/3/4) va chi xoa dung vung khoi wheel (thay vi ca vung noi dung
+// 216px) truoc khi ve lai -> giam dien tich + thoi gian ve moi lan doi muc, chuyen muot hon
+static const int16_t CAR_ROW_H[5] = {20, 30, 40, 30, 20};   // chieu cao tung khe: ngoai->giua->ngoai
+static const uint8_t CAR_ROW_SIZE[5] = {2, 3, 4, 3, 2};     // co chu tung khe (TFTdrawText size)
+static const int16_t CAR_GAP = 4;                            // khoang cach giua cac khe
+static const int16_t CAR_BOX_X = 50, CAR_BOX_W = 220;         // khung nen chi ve cho khe giua + ke
 
-static void draw_menu_row(int8_t i, bool selected)
+// vi tri Y cua tung khe khong doi theo funtion_mode (chi NOI DUNG/chu ben trong doi) - nen khung
+// nen (box fill+border) chi can ve 1 LAN duy nhat luc vao menu; moi lan doi muc chi can xoa+ve lai
+// phan CHU ben trong khung (vung nho hon nhieu so voi xoa+ve lai ca khoi) -> giam giat/nhap nhay
+// ro ret so voi cach cu (xoa toan khoi + ve lai het khung moi lan cuon).
+static int16_t car_row_y[5]; // cache vi tri Y da tinh (dung chung giua ve khung va ve chu)
+
+static void car_compute_layout()
 {
-    const char *labels[FUNTION_MODE_COUNT] = {"PLAYER", "FUNTION", "MODE", "CLOCK", "COLOR", "FONT", "TASK"};
-    int16_t rowY = MENU_START_Y + i * (MENU_ROW_H + MENU_ROW_GAP);
-    uint16_t bg = selected ? UI_PANEL_HI : UI_PANEL;
-    uint16_t border = selected ? UI_ACCENT : UI_BORDER;
-    uint16_t fg = selected ? UI_ACCENT : UI_TEXT_DIM;
-    myTFT.TFTfillRoundRect(MENU_ROW_X, rowY, MENU_ROW_W, MENU_ROW_H, 4, bg);
-    myTFT.TFTdrawRoundRect(MENU_ROW_X, rowY, MENU_ROW_W, MENU_ROW_H, 4, border);
-    myTFT.TFTdrawText(MENU_ROW_X + 15, rowY + 4, (char *)labels[i], fg, bg, 2); // (rowH-textH)/2 = (24-16)/2=4
+    int16_t total = CAR_GAP * 4;
+    for (int i = 0; i < 5; i++)
+        total += CAR_ROW_H[i];
+    int16_t y = 24 + (216 - total) / 2; // can giua khoi wheel trong vung noi dung (24..240)
+    for (int slot = 0; slot < 5; slot++)
+    {
+        car_row_y[slot] = y;
+        y += CAR_ROW_H[slot] + CAR_GAP;
+    }
+}
+
+// ve khung nen (fill + border) ca 5 khe - goi 1 lan duy nhat khi vua vao menu (menu_needs_full_draw)
+static void draw_menu_carousel_frame()
+{
+    int16_t total = CAR_GAP * 4;
+    for (int i = 0; i < 5; i++)
+        total += CAR_ROW_H[i];
+    myTFT.TFTfillRect(0, car_row_y[0] - 2, 320, total + 4, UI_BG);
+
+    for (int slot = 0; slot < 5; slot++)
+    {
+        int16_t y = car_row_y[slot], h = CAR_ROW_H[slot];
+        if (slot == 2) // khe giua (dang chon)
+        {
+            myTFT.TFTfillRoundRect(CAR_BOX_X, y, CAR_BOX_W, h, 6, UI_PANEL_HI);
+            myTFT.TFTdrawRoundRect(CAR_BOX_X, y, CAR_BOX_W, h, 6, UI_ACCENT);
+        }
+        else if (slot == 1 || slot == 3) // 2 khe ke
+        {
+            myTFT.TFTfillRoundRect(CAR_BOX_X, y, CAR_BOX_W, h, 4, UI_PANEL);
+            myTFT.TFTdrawRoundRect(CAR_BOX_X, y, CAR_BOX_W, h, 4, UI_BORDER);
+        }
+        // khe ngoai cung (slot 0/4): khong co khung, chi chu mo tren nen UI_BG
+    }
+}
+
+// chi xoa + ve lai CHU trong tung khe (khung nen giu nguyen) - goi moi khi doi muc dang chon
+static void draw_menu_carousel_labels()
+{
+    const char *const *labels = lang_menu_labels();
+
+    for (int slot = 0; slot < 5; slot++)
+    {
+        int8_t idx = (int8_t)(((funtion_mode - 2 + slot) % FUNTION_MODE_COUNT + FUNTION_MODE_COUNT) % FUNTION_MODE_COUNT);
+        int16_t y = car_row_y[slot], h = CAR_ROW_H[slot];
+        uint8_t size = CAR_ROW_SIZE[slot];
+        bool isCenter = (slot == 2);
+        bool isAdjacent = (slot == 1 || slot == 3);
+        uint16_t bg = isCenter ? UI_PANEL_HI : (isAdjacent ? UI_PANEL : UI_BG);
+        uint16_t fg = isCenter ? UI_ACCENT : UI_TEXT_FAINT; // mo hon nua so voi UI_TEXT_DIM truoc day
+
+        // xoa vung chu cu (chua cham vien khung, chi phan ruot ben trong)
+        myTFT.TFTfillRect(CAR_BOX_X + 3, y + 2, CAR_BOX_W - 6, h - 4, bg);
+
+        int16_t charW = (int16_t)(6 * size);
+        int16_t textW = (int16_t)strlen(labels[idx]) * charW;
+        int16_t tx = 160 - textW / 2; // can giua theo truc doc man hinh (320/2)
+        if (tx < 0)
+            tx = 0;
+        int16_t ty = y + (h - 8 * size) / 2;
+        myTFT.TFTdrawText(tx, ty, (char *)labels[idx], fg, bg, size);
+    }
 }
 
 void MONITOR_FUNTION()
@@ -241,20 +341,17 @@ void MONITOR_FUNTION()
 
     if (menu_needs_full_draw)
     {
-        myTFT.TFTfillRect(0, 24, 320, 216, UI_BG);
-        for (int i = 0; i < FUNTION_MODE_COUNT; i++)
-        {
-            draw_menu_row(i, i == funtion_mode);
-        }
+        car_compute_layout();
+        draw_menu_carousel_frame();
+        draw_menu_carousel_labels();
         last_funtion_mode = funtion_mode;
         menu_needs_full_draw = false;
     }
     else if (last_funtion_mode != funtion_mode)
     {
-        // chi ve lai 2 dong bi anh huong (dong cu bo chon + dong moi duoc chon)
-        // thay vi xoa toan bo man hinh -> chuyen doi giua cac muc muot, khong nhap nhay
-        draw_menu_row(last_funtion_mode, false);
-        draw_menu_row(funtion_mode, true);
+        // khung nen da ve san, vi tri khong doi -> chi can ve lai chu, muot hon nhieu so voi
+        // xoa+ve lai ca khoi (xem draw_menu_carousel_labels)
+        draw_menu_carousel_labels();
         last_funtion_mode = funtion_mode;
     }
 }
@@ -382,6 +479,77 @@ static void draw_ampm(bool isPM)
     myTFT.TFTdrawText(x, y, (char *)(isPM ? "PM" : "AM"), UI_ACCENT, UI_BG, 2);
 }
 
+/*------------------- CPU/RAM duoi dong ngay thang, man hinh dong ho -------------------*/
+// Vi tri Y phu thuoc chieu cao ky tu gio dang chon (active_clock_font/active_clock_size), tinh
+// giong cach tinh dateY trong MONITOR_CLOCK ben duoi de luon nam sat duoi dong ngay (DD/MM/YYYY)
+// bat ke ho/co chu nao dang ap dung.
+// Nhan/gia tri van can tuan thu gioi han uint8_t cua con tro X trong TFTdrawText (toi da 255):
+// clamp gia tri hien thi toi da 99% de giu do rong chuoi "C:99%" co dinh (toi da 5 ky tu).
+static int16_t get_clock_stat_y()
+{
+    int16_t charW, charH;
+    get_clock_char_metrics(active_clock_font, active_clock_size, charW, charH);
+    // TIME_Y + charH + 4 (gap AM/PM) + 20 (cao AM/PM) + 8 (gap) + 25 (cao dong ngay) + 6 (gap)
+    return TIME_Y + charH + 4 + 20 + 8 + 25 + 6;
+}
+
+static const int16_t CLOCK_STAT_H = 26;
+static const int16_t CLOCK_STAT_GAP = 14; // khoang cach giua 2 nhan CPU/RAM
+// can giua theo dung chieu rong man hinh (320), giong moi thanh phan khac trong file nay
+// (gio, ngay, AM/PM...). x cuoi cung van duoc clamp phia duoi de khong bao gio tran uint8_t.
+static const int16_t SCREEN_W = 320;
+static int8_t last_clock_cpu_shown = -2, last_clock_ram_shown = -2; // -2 = chua ve lan nao
+
+void reset_clock_cpu_ram_cache()
+{
+    myTFT.TFTfillRect(0, get_clock_stat_y(), 320, CLOCK_STAT_H, UI_BG);
+    last_clock_cpu_shown = -2;
+    last_clock_ram_shown = -2;
+}
+
+static void draw_clock_cpu_ram()
+{
+    // gia tri -1 = "chua co du lieu that" (xem PLG_state.h), hien thi 0 thay vi so am;
+    // clamp toi da 99 de gioi han do rong chuoi toi da, tranh tran x=255
+    int8_t cpu = chart_cpu[CHART_SAMPLES - 1];
+    int8_t ram = chart_ram[CHART_SAMPLES - 1];
+    if (cpu < 0)
+        cpu = 0;
+    if (cpu > 99)
+        cpu = 99;
+    if (ram < 0)
+        ram = 0;
+    if (ram > 99)
+        ram = 99;
+
+    // ve lai ca cap khi 1 trong 2 gia tri doi, vi vi tri (can giua theo tong do rong) phu thuoc ca 2
+    if (last_clock_cpu_shown == cpu && last_clock_ram_shown == ram)
+        return;
+    last_clock_cpu_shown = cpu;
+    last_clock_ram_shown = ram;
+
+    char cpuText[8], ramText[8];
+    snprintf(cpuText, sizeof(cpuText), "%s:%d%%", lang_label_cpu(), cpu);
+    snprintf(ramText, sizeof(ramText), "%s:%d%%", lang_label_ram(), ram);
+
+    const int16_t charW = 3 * (5 + 1); // size3
+    int16_t cpuW = (int16_t)strlen(cpuText) * charW;
+    int16_t ramW = (int16_t)strlen(ramText) * charW;
+    int16_t totalW = cpuW + CLOCK_STAT_GAP + ramW;
+    int16_t startX = (SCREEN_W - totalW) / 2;
+    if (startX < 0)
+        startX = 0;
+    if (startX + totalW > 255) // TFTdrawText nhan x kieu uint8_t, khong bao gio de tran
+        startX = 255 - totalW;
+    if (startX < 0)
+        startX = 0;
+
+    int16_t y = get_clock_stat_y();
+    myTFT.TFTfillRect(0, y, 320, CLOCK_STAT_H, UI_BG);
+    myTFT.TFTdrawText(startX, y, cpuText, UI_CPU, UI_BG, 3);                      // dong bo mau voi bieu do CPU
+    myTFT.TFTdrawText(startX + cpuW + CLOCK_STAT_GAP, y, ramText, UI_RAM, UI_BG, 3); // dong bo mau voi bieu do RAM
+}
+
 // man hinh dong ho: hien gio (12h + AM/PM) + ngay hien tai (nhan tu monitor.py qua serial,
 // truong TIME/DATE). Gio ve theo ho/co chu dang chon trong SETTING > FONT
 // (active_clock_font/active_clock_size).
@@ -403,7 +571,15 @@ void MONITOR_CLOCK()
         last_ampm_shown = -1;
         strcpy(last_date_str, "");
         clock_dirty = true;
+        reset_clock_cpu_ram_cache(); // xoa vung CPU/RAM cu (vd gio Task Manager) + buoc ve lai
+
+        // xoa gio nho HH:MM cua Task Manager con sot lai tren thanh trang thai (o day y<24,
+        // nam ngoai vung noi dung vua xoa o tren) khi chuyen tu Task Manager sang Clock
+        myTFT.TFTfillRect(188, 4, 65, 17, UI_BG);
+        reset_taskmanager_clock_cache(); // buoc ve lai gio do khi quay lai Task Manager
     }
+
+    draw_clock_cpu_ram();
 
     if (clock_dirty)
     {
@@ -485,8 +661,10 @@ void MONITOR_FONT()
         int16_t nameW = (int16_t)strlen(name) * 3 * (5 + 1); // size3
         myTFT.TFTdrawText((320 - nameW) / 2, 130, (char *)name, UI_ACCENT, UI_BG, 3);
 
-        // "Nhan nut de chon co chu" 23 ky tu, size1 -> 6px/ky tu, rong 138px -> x=(320-138)/2=91
-        myTFT.TFTdrawText(91, 155, (char *)"Nhan nut de chon co chu", UI_TEXT_DIM, UI_BG, 1);
+        // x tinh dong theo do dai chuoi (khac nhau giua VI/EN), size1 -> 6px/ky tu
+        const char *hint1 = lang_hint_choose_size();
+        int16_t hint1X = (320 - (int16_t)strlen(hint1) * 6) / 2;
+        myTFT.TFTdrawText(hint1X, 155, (char *)hint1, UI_TEXT_DIM, UI_BG, 1);
     }
 }
 
@@ -522,8 +700,10 @@ void MONITOR_FONT_SIZE()
         int16_t labelW = (int16_t)strlen(sizeLabel) * 3 * (5 + 1); // size3
         myTFT.TFTdrawText((320 - labelW) / 2, 130, sizeLabel, UI_ACCENT, UI_BG, 3);
 
-        // "Nhan nut de ap dung" 19 ky tu, size1 -> 6px/ky tu, rong 114px -> x=(320-114)/2=103
-        myTFT.TFTdrawText(103, 155, (char *)"Nhan nut de ap dung", UI_TEXT_DIM, UI_BG, 1);
+        // x tinh dong theo do dai chuoi (khac nhau giua VI/EN), size1 -> 6px/ky tu
+        const char *hint2 = lang_hint_apply();
+        int16_t hint2X = (320 - (int16_t)strlen(hint2) * 6) / 2;
+        myTFT.TFTdrawText(hint2X, 155, (char *)hint2, UI_TEXT_DIM, UI_BG, 1);
     }
 }
 
@@ -580,9 +760,10 @@ void MONITOR_COLOR()
         for (uint8_t i = 0; i < UI_ACCENT_PRESET_COUNT; i++)
             draw_color_swatch(i, i == color_index);
         draw_color_name(color_index);
-        // can giua: "Nhan nut de ap dung" 19 ky tu, size1 -> moi ky tu 6px, rong 114px
-        // -> x=(320-114)/2=103
-        myTFT.TFTdrawText(103, 145, (char *)"Nhan nut de ap dung", UI_TEXT_DIM, UI_BG, 1);
+        // x tinh dong theo do dai chuoi (khac nhau giua VI/EN), size1 -> 6px/ky tu
+        const char *hint = lang_hint_apply();
+        int16_t hintX = (320 - (int16_t)strlen(hint) * 6) / 2;
+        myTFT.TFTdrawText(hintX, 145, (char *)hint, UI_TEXT_DIM, UI_BG, 1);
         last_color_index = color_index;
     }
     else if (last_color_index != color_index)
@@ -593,5 +774,50 @@ void MONITOR_COLOR()
         draw_color_swatch(color_index, true);
         draw_color_name(color_index);
         last_color_index = color_index;
+    }
+}
+
+/*------------------- Man hinh chon ngon ngu giao dien (VI/EN) -------------------*/
+// ve 1 dong ten ngon ngu (idx: 0=VI, 1=EN), can giua man hinh; xoa vung chu cu truoc khi ve lai
+static const int16_t LANG_ROW_Y[UI_LANG_COUNT] = {90, 130};
+static void draw_language_row(int8_t idx, bool selected)
+{
+    const char *name = lang_name(idx);
+    int16_t textW = (int16_t)strlen(name) * 3 * (5 + 1); // size3
+    int16_t x = (320 - textW) / 2;
+    uint16_t fg = selected ? UI_ACCENT : UI_TEXT_DIM;
+    myTFT.TFTfillRect(0, LANG_ROW_Y[idx] - 3, 320, 30, UI_BG);
+    myTFT.TFTdrawText(x, LANG_ROW_Y[idx], (char *)name, fg, UI_BG, 3);
+}
+
+// dung encoder duyet qua VI/EN (xem ten ngon ngu bang chinh ngon ngu dang duyet), nhan nut de
+// ap dung va quay lai menu SETTING. Cau truc tuong tu MONITOR_COLOR/MONITOR_FONT.
+void MONITOR_LANGUAGE()
+{
+    MONITOR_STATUS();
+
+    language_index = (int8_t)(((language_index % UI_LANG_COUNT) + UI_LANG_COUNT) % UI_LANG_COUNT);
+
+    if (last_show_language != show_language)
+    {
+        last_show_language = show_language;
+        myTFT.TFTfillRect(0, 24, 320, 216, UI_BG);
+        last_language_index = -1;
+    }
+
+    if (last_language_index < 0)
+    {
+        for (int8_t i = 0; i < UI_LANG_COUNT; i++)
+            draw_language_row(i, i == language_index);
+        const char *hint = lang_hint_apply();
+        int16_t hintX = (320 - (int16_t)strlen(hint) * 6) / 2;
+        myTFT.TFTdrawText(hintX, 175, (char *)hint, UI_TEXT_DIM, UI_BG, 1);
+        last_language_index = language_index;
+    }
+    else if (last_language_index != language_index)
+    {
+        draw_language_row(last_language_index, false);
+        draw_language_row(language_index, true);
+        last_language_index = language_index;
     }
 }

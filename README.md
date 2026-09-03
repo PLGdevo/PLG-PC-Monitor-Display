@@ -22,7 +22,8 @@ Firmware cho Raspberry Pi Pico điều khiển màn hình TFT ST7789 (240×320),
 
 - **Splash khởi động**: hiển thị logo dự án kèm thanh Loading khi bật nguồn, luôn chạy đầy đủ mỗi lần khởi động.
 - **Giao diện HOME**: hiển thị trạng thái sân cầu lông theo player 1/2, pin remote, pin máy, trạng thái kết nối và trạng thái RUN/STOP.
-- **Giao diện SETTING**: menu dạng danh sách gồm PLAYER / FUNTION / MODE / CLOCK / COLOR / TASK, chọn bằng encoder xoay; CLOCK mở màn hình đồng hồ, COLOR mở màn hình chọn màu nhận diện, TASK quay lại thẳng màn hình Task Manager (HOME).
+- **Giao diện SETTING**: menu dạng danh sách gồm PLAYER / FUNTION / MODE / CLOCK / COLOR / FONT / TASK / LANGUAGE, chọn bằng encoder xoay; CLOCK mở màn hình đồng hồ, COLOR mở màn hình chọn màu nhận diện, TASK quay lại thẳng màn hình Task Manager (HOME), LANGUAGE đổi ngôn ngữ nhãn giao diện (Tiếng Việt/English, lưu vào flash).
+- **Màn hình đồng hồ hiển thị CPU/RAM**: khi ở màn hình CLOCK, % CPU/RAM mới nhất (nhận từ `pc_monitor/monitor.py`) hiện cạnh icon pin ở đầu màn hình.
 - **Task Manager PC**: đọc dữ liệu CPU / RAM / GPU (usage 3D + VRAM riêng) / WiFi / pin / giờ / ngày gửi lên từ máy tính qua USB Serial, vẽ 5 biểu đồ (chart) theo thời gian thực và hiển thị đồng hồ HH:MM ở góc trên-phải màn hình.
 - **Điều khiển bằng encoder**: xoay để tăng/giảm giá trị, nhấn để chuyển màn hình hoặc RUN/STOP.
 - **Nút BOOTSEL rời**: vào chế độ nạp firmware qua USB mà không cần tháo board ra khỏi máy.
@@ -149,6 +150,7 @@ include/PLG_serial_link.h      - đọc dữ liệu Task Manager (CPU/RAM/GPU/WI
 include/PLG_charts.h           - vẽ biểu đồ dạng đường cho Task Manager
 include/PLG_screens.h          - các màn hình: splash, status bar, Task Manager, menu SETTING, CLOCK, COLOR
 include/PLG_input.h            - xử lý encoder xoay + nút nhấn (ngắn/giữ lâu), chuyển màn hình
+include/PLG_lang.h             - bảng chuỗi text theo ngôn ngữ (VI/EN) dùng chung cho các màn hình
 src/*.cpp                      - phần cài đặt tương ứng với từng header ở trên
 PLG_logo.hpp                   - dữ liệu bitmap logo hiển thị lúc khởi động
 PLG_lib/ST7789_TFT_PICO-main/  - thư viện driver màn hình ST7789

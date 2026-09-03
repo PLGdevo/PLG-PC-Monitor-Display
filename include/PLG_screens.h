@@ -24,6 +24,10 @@ void MONITOR_CLOCK();
 // man hinh chon mau nhan dien (UI_ACCENT)
 void MONITOR_COLOR();
 
+// man hinh chon ngon ngu giao dien (VI/EN, ui_language). Nhan nut de ap dung (luu flash) va
+// quay lai menu SETTING.
+void MONITOR_LANGUAGE();
+
 // buoc 1/2 chon chu so dong ho: chon HO CHU (active_clock_font) trong 5 kieu co san.
 // Nhan nut de chuyen sang buoc 2 (MONITOR_FONT_SIZE) chon co chu cho ho vua chon.
 void MONITOR_FONT();
@@ -34,6 +38,10 @@ void MONITOR_FONT_SIZE();
 
 // xoa cache noi bo cua dong ho Task Manager goc tren-phai, buoc ve lai lan sau (vd khi roi HOME)
 void reset_taskmanager_clock_cache();
+
+// xoa vung CPU/RAM canh pin (man hinh dong ho) + cache noi bo, buoc ve lai lan sau; goi khi roi
+// man hinh dong ho (show_clock -> false) de khong de sot chu cu de len man hinh khac
+void reset_clock_cpu_ram_cache();
 
 // tra ve gia tri size thuc te ung voi 1 index (0-based) trong danh sach co chu hop le cua ho
 // chu style; dung khi ap dung lua chon o buoc 2 (MONITOR_FONT_SIZE), xem PLG_input.cpp

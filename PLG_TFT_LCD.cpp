@@ -75,6 +75,8 @@ void loop()
             MONITOR_FONT();
         else if (show_font_size)
             MONITOR_FONT_SIZE();
+        else if (show_language)
+            MONITOR_LANGUAGE();
         else
             MONITOR_FUNTION();
         break;

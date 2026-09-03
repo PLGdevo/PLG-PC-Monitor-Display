@@ -25,6 +25,8 @@ static void key_value_tang()
             clock_font_index++;
         else if (show_font_size)
             clock_size_index++;
+        else if (show_language)
+            language_index++;
         else
             funtion_mode++;
         break;
@@ -46,6 +48,8 @@ static void key_value_giam()
             clock_font_index--;
         else if (show_font_size)
             clock_size_index--;
+        else if (show_language)
+            language_index--;
         else
             funtion_mode--;
         break;
@@ -114,6 +118,7 @@ void read_button()
                 printf("PLG_>>>> HOME: exit CLOCK, back to TASK MANAGER\n\r");
                 show_clock = false;
                 last_show_clock = false; // dong bo lai co, de lan sau bat CLOCK duoc xoa man hinh dung cach
+                reset_clock_cpu_ram_cache(); // xoa vung CPU/RAM cua CLOCK, tranh de sot chu cu sang TASK MANAGER
                 // buoc MONITOR_TASKMANAGER ve lai toan bo (xoa sach noi dung CLOCK cu, ve lai khung chart)
                 last_desktop = !desktop;
             }
@@ -132,6 +137,7 @@ void read_button()
                 printf("PLG_>>>> exit CLOCK, back to SETTING menu\n\r");
                 show_clock = false;
                 last_show_clock = false; // dong bo lai co, de lan sau vao CLOCK duoc xoa man hinh dung cach
+                reset_clock_cpu_ram_cache(); // xoa vung CPU/RAM cua CLOCK, tranh de sot chu cu sang menu SETTING
                 menu_needs_full_draw = true;
             }
             else if (desktop_state == DESKTOP_SETING && funtion_mode == FUNTION_MODE_ID)
@@ -143,7 +149,7 @@ void read_button()
             {
                 printf("PLG_>>>> apply COLOR #%d, back to SETTING menu\n\r", color_index);
                 UI_ACCENT = UI_ACCENT_PRESETS[color_index];
-                save_settings_to_flash((uint8_t)color_index, (uint8_t)active_clock_font, (uint8_t)active_clock_size); // luu lai, mat nguon van giu mau da chon
+                save_settings_to_flash((uint8_t)color_index, (uint8_t)active_clock_font, (uint8_t)active_clock_size, (uint8_t)ui_language); // luu lai, mat nguon van giu mau da chon
                 show_color = false;
                 last_show_color = false; // dong bo lai co, de lan sau vao COLOR duoc xoa man hinh dung cach
                 // buoc ve lai toan bo cac man hinh dung UI_ACCENT
@@ -169,7 +175,7 @@ void read_button()
             {
                 printf("PLG_>>>> apply CLOCK FONT #%d size #%d, back to SETTING menu\n\r", active_clock_font, clock_size_index);
                 active_clock_size = get_clock_size_value(active_clock_font, clock_size_index);
-                save_settings_to_flash((uint8_t)color_index, (uint8_t)active_clock_font, (uint8_t)active_clock_size); // luu lai, mat nguon van giu ho/co chu da chon
+                save_settings_to_flash((uint8_t)color_index, (uint8_t)active_clock_font, (uint8_t)active_clock_size, (uint8_t)ui_language); // luu lai, mat nguon van giu ho/co chu da chon
                 show_font_size = false;
                 last_show_font_size = false; // dong bo lai co, de lan sau vao man hinh chon size duoc xoa man hinh dung cach
                 menu_needs_full_draw = true;
@@ -189,6 +195,22 @@ void read_button()
                 printf("PLG_>>>> enter FONT (step 1: choose family)\n\r");
                 clock_font_index = active_clock_font; // bat dau duyet tu ho chu dang dung
                 show_font = true;
+            }
+            else if (desktop_state == DESKTOP_SETING && show_language)
+            {
+                printf("PLG_>>>> apply LANGUAGE #%d, back to SETTING menu\n\r", language_index);
+                ui_language = language_index;
+                save_settings_to_flash((uint8_t)color_index, (uint8_t)active_clock_font, (uint8_t)active_clock_size, (uint8_t)ui_language); // luu lai, mat nguon van giu ngon ngu da chon
+                show_language = false;
+                last_show_language = false; // dong bo lai co, de lan sau vao LANGUAGE duoc xoa man hinh dung cach
+                // buoc ve lai toan bo menu SETTING de cap nhat nhan theo ngon ngu moi
+                menu_needs_full_draw = true;
+            }
+            else if (desktop_state == DESKTOP_SETING && funtion_mode == FUNTION_MODE_LANGUAGE)
+            {
+                printf("PLG_>>>> enter LANGUAGE\n\r");
+                language_index = ui_language; // bat dau duyet tu ngon ngu dang dung
+                show_language = true;
             }
         }
     }
@@ -224,6 +246,7 @@ void DISPLAY_ROLL()
             show_color = false;          // luon vao menu truoc, khong vao thang man hinh chon mau
             show_font = false;           // luon vao menu truoc, khong vao thang man hinh chon ho chu
             show_font_size = false;      // luon vao menu truoc, khong vao thang man hinh chon co chu
+            show_language = false;       // luon vao menu truoc, khong vao thang man hinh chon ngon ngu
 
             // xoa gio Task Manager o goc tren-phai khi roi HOME, tranh no bi dinh lai
             // (khong duoc xoa) tren cac man hinh khac nhu SETTING/CLOCK

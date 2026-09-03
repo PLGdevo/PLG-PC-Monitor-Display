@@ -7,6 +7,41 @@
 
 ST7789_TFT myTFT;
 
+static bool text_has_lower(const char *s)
+{
+    for (; *s; s++)
+        if (*s >= 'a' && *s <= 'z')
+            return true;
+    return false;
+}
+
+void ui_drawText(int16_t x, int16_t y, const char *text, uint16_t color, uint16_t bg, uint8_t size)
+{
+    int8_t style = active_clock_font;
+    if (style == 2) // Seven_Seg: chi ve dung so/dau, khong dung cho van ban chu binh thuong
+        style = 0;
+    else if ((style == 1 || style == 3) && text_has_lower(text)) // Thick/Wide: khong co chu thuong
+        style = 0;
+
+    switch (style)
+    {
+    case 1:
+        myTFT.TFTFontNum(myTFT.TFTFont_Thick);
+        break;
+    case 3:
+        myTFT.TFTFontNum(myTFT.TFTFont_Wide);
+        break;
+    case 4:
+        myTFT.TFTFontNum(myTFT.TFTFont_HomeSpun);
+        break;
+    default:
+        myTFT.TFTFontNum(myTFT.TFTFont_Default);
+        break;
+    }
+    myTFT.TFTdrawText((uint16_t)x, (uint16_t)y, (char *)text, color, bg, size);
+    myTFT.TFTFontNum(myTFT.TFTFont_Default);
+}
+
 void setup_pin()
 {
     stdio_init_all();
