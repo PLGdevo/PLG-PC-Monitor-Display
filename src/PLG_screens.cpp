@@ -217,18 +217,18 @@ static void draw_taskmanager_clock()
 
 void MONITOR_TASKMANAGER()
 {
-    ChartLayout c[5];
+    ChartLayout c[6];
     get_chart_layout(c);
 
     if (last_desktop != desktop)
     {
         myTFT.TFTfillRect(0, 24, 320, 216, UI_BG);
-        for (int i = 0; i < 5; i++)
+        for (int i = 0; i < 6; i++)
             draw_chart_frame(c[i].x, c[i].y, c[i].w, c[i].h);
         last_desktop = desktop;
         taskmanager_dirty = true;
         reset_taskmanager_clock_cache(); // buoc ve lai gio sau khi xoa man hinh
-        reset_chart_cache();              // buoc 5 chart ve lai (man hinh vua bi xoa trang)
+        reset_chart_cache();              // buoc 6 chart ve lai (man hinh vua bi xoa trang)
     }
 
     if (taskmanager_dirty)
@@ -239,7 +239,14 @@ void MONITOR_TASKMANAGER()
         // "MEM" (3 ky tu, khong phai "VRAM" 4 ky tu): o khung ben phai (x~164) TFTdrawText dung
         // con tro X kieu uint8_t (toi da 255) - nhan dai hon 1 ky tu la du lam tran/wrap ve dau man hinh
         draw_chart_data(c[3].x, c[3].y, c[3].w, c[3].h, "MEM", chart_gpumem, UI_GPUMEM, 101, nullptr, 3);
+        // WIFI chia doi voi TEMP (nhiet do CPU) tren cung 1 hang, moi o rong bang nua nhu truoc.
+        // O nay nam o nua PHAI man hinh (x~164) - giong ly do "MEM" duoc chon thay vi "VRAM" o
+        // tren: TFTdrawText dung con tro X kieu uint8_t (toi da 255), nhan "TEMP" (4 ky tu) +
+        // "  NNC" se lam ky tu cuoi tinh ra vi tri >255 va tran ve dau man hinh - dung "TMP" (3
+        // ky tu, bang do dai voi "RAM"/"MEM" da an toan) va KHONG dung warnText (vd "HOT") vi
+        // ngay ca voi nhan ngan, chuoi canh bao dai them se lai vuot qua nguong an toan nay.
         draw_chart_data(c[4].x, c[4].y, c[4].w, c[4].h, "WIFI", chart_wifi, UI_WIFI, 101, nullptr, 4);
+        draw_chart_data(c[5].x, c[5].y, c[5].w, c[5].h, "TMP", chart_temp, UI_TEMP, 101, nullptr, 5, "C");
 
         taskmanager_dirty = false;
     }

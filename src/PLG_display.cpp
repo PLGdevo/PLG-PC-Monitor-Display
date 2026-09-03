@@ -94,6 +94,11 @@ void setup_pin()
     myTFT.TFTST7789Initialize();
     myTFT.TFTfillScreen(ST7789_BLACK);
     myTFT.TFTFontNum(myTFT.TFTFont_Default);
+    // Thu vien mac dinh BAT wrap chu (_wrap=true): chu ve vuot bien se tu nhay phan du sang DAU
+    // DONG MOI thay vi bi cat - day chinh la nguyen nhan cac ky tu cuoi (vd don vi "C" cua TEMP)
+    // dot ngot xuat hien o dau mot hang khac. Tat wrap: chu vuot bien se don gian bi cat o bien,
+    // an toan hon nhieu so voi nhay lung tung sang vi tri khac tren man hinh.
+    myTFT.TFTsetTextWrap(false);
 
     last_button = gpio_get(button);
     last_button_1 = gpio_get(button_1);

@@ -33,10 +33,10 @@ void read_taskmanager_serial()
                 }
                 else
                 {
-                    int cpu = -1, ram = -1, gpu = -1, gpumem = -1, wifi = -1, bat = -1;
+                    int cpu = -1, ram = -1, gpu = -1, gpumem = -1, wifi = -1, temp = -1, bat = -1;
                     char time_buf[9] = "", date_buf[11] = "";
-                    int n = sscanf(serial_line_buf, "CPU:%d;RAM:%d;GPU:%d;GPUMEM:%d;WIFI:%d;TIME:%8[^;];DATE:%10[^;];BAT:%d",
-                                   &cpu, &ram, &gpu, &gpumem, &wifi, time_buf, date_buf, &bat);
+                    int n = sscanf(serial_line_buf, "CPU:%d;RAM:%d;GPU:%d;GPUMEM:%d;WIFI:%d;TEMP:%d;TIME:%8[^;];DATE:%10[^;];BAT:%d",
+                                   &cpu, &ram, &gpu, &gpumem, &wifi, &temp, time_buf, date_buf, &bat);
                     if (n >= 5)
                     {
                         chart_push(chart_cpu, cpu);
@@ -46,20 +46,26 @@ void read_taskmanager_serial()
                         chart_push(chart_wifi, wifi);
                         taskmanager_dirty = true;
                     }
-                    if (n >= 6 && strcmp(current_time_str, time_buf) != 0)
+                    // TEMP la truong moi them sau (monitor.py cu chua gui): chi push khi co mat,
+                    // khong thi giu nguyen bieu do nhiet do o trang thai "chua co du lieu" (-1)
+                    if (n >= 6)
+                    {
+                        chart_push(chart_temp, temp);
+                    }
+                    if (n >= 7 && strcmp(current_time_str, time_buf) != 0)
                     {
                         strncpy(current_time_str, time_buf, sizeof(current_time_str) - 1);
                         current_time_str[sizeof(current_time_str) - 1] = '\0';
                         clock_dirty = true;
                     }
-                    if (n >= 7 && strcmp(current_date_str, date_buf) != 0)
+                    if (n >= 8 && strcmp(current_date_str, date_buf) != 0)
                     {
                         strncpy(current_date_str, date_buf, sizeof(current_date_str) - 1);
                         current_date_str[sizeof(current_date_str) - 1] = '\0';
                         clock_dirty = true;
                     }
                     // pin ben trai = pin laptop nhan tu monitor.py; -1 nghia la may khong co pin (PC ban) -> giu nguyen gia tri cu
-                    if (n == 8 && bat >= 0)
+                    if (n == 9 && bat >= 0)
                     {
                         battery1 = (int8_t)bat;
                     }

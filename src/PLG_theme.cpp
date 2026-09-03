@@ -15,6 +15,7 @@ const uint16_t UI_RAM = RGB565(240, 185, 60);
 const uint16_t UI_GPU = RGB565(70, 200, 235);
 const uint16_t UI_GPUMEM = RGB565(200, 120, 235);
 const uint16_t UI_WIFI = RGB565(110, 150, 255);
+const uint16_t UI_TEMP = RGB565(240, 120, 90);
 
 const uint16_t UI_ACCENT_PRESETS[] = {
     RGB565(0, 194, 168),   // Teal (mac dinh)

@@ -104,7 +104,7 @@ extern bool show_language;         // true khi dang xem man hinh chon ngon ngu
 extern bool last_show_language;
 
 /*------------------- PC Task Manager chart (nhan tu pc_monitor/monitor.py) -------------------*/
-// dinh dang du lieu nhan qua USB serial: "CPU:<int>;RAM:<int>;GPU:<int>;GPUMEM:<int>;WIFI:<int>;TIME:..;DATE:..;BAT:<int>\n"
+// dinh dang du lieu nhan qua USB serial: "CPU:<int>;RAM:<int>;GPU:<int>;GPUMEM:<int>;WIFI:<int>;TEMP:<int>;TIME:..;DATE:..;BAT:<int>\n"
 #define CHART_SAMPLES 100 // so mau hien thi tren moi bieu do (= chieu rong bieu do, px)
 // gia tri -1 = "chua co du lieu that", khac voi 0 = "co du lieu that va la 0%".
 extern int8_t chart_cpu[CHART_SAMPLES];
@@ -112,6 +112,7 @@ extern int8_t chart_ram[CHART_SAMPLES];
 extern int8_t chart_gpu[CHART_SAMPLES];    // GPU 3D (core usage %)
 extern int8_t chart_gpumem[CHART_SAMPLES]; // GPU memory (VRAM %)
 extern int8_t chart_wifi[CHART_SAMPLES];
+extern int8_t chart_temp[CHART_SAMPLES]; // nhiet do CPU (do C, gia tri 0-100 vua khop thang do % co san)
 extern bool taskmanager_dirty; // true khi co mau moi can ve lai
 extern char serial_line_buf[112];
 extern uint8_t serial_line_len;

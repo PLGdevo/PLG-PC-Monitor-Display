@@ -22,6 +22,7 @@ extern const uint16_t UI_RAM;
 extern const uint16_t UI_GPU;    // GPU 3D (usage core)
 extern const uint16_t UI_GPUMEM; // GPU memory (VRAM)
 extern const uint16_t UI_WIFI;
+extern const uint16_t UI_TEMP; // nhiet do CPU
 
 extern const uint16_t UI_ACCENT_PRESETS[];
 extern const char *UI_ACCENT_NAMES[];

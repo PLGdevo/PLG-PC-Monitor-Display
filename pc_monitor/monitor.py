@@ -19,15 +19,17 @@ Chay:
     python monitor.py --list           # liet ke cac cong serial dang co
 
 Dinh dang du lieu gui xuong board, moi dong ket thuc bang '\n':
-    CPU:<int>;RAM:<int>;GPU:<int>;WIFI:<int>;TIME:<HH:MM:SS>;DATE:<DD/MM/YYYY>;BAT:<int>
+    CPU:<int>;RAM:<int>;GPU:<int>;GPUMEM:<int>;WIFI:<int>;TEMP:<int>;TIME:<HH:MM:SS>;DATE:<DD/MM/YYYY>;BAT:<int>
 
-Trong do gia tri phan tram la 0-100. GPU/WIFI/BAT se la -1 neu khong doc duoc
-(khong co GPU NVIDIA, khong lay duoc cuong do wifi, hoac may khong co pin nhu
-PC ban). TIME/DATE la gio va ngay hien tai cua may tinh, dung de hien thi dong
-ho tren man hinh thiet bi. BAT la pin cua laptop, hien thi o icon pin ben trai.
+Trong do gia tri phan tram la 0-100 (TEMP la do C, kep 0-100). GPU/WIFI/TEMP/BAT
+se la -1 neu khong doc duoc (khong co GPU NVIDIA, khong lay duoc cuong do wifi,
+may khong ho tro doc nhiet do CPU qua ACPI, hoac may khong co pin nhu PC ban).
+TIME/DATE la gio va ngay hien tai cua may tinh, dung de hien thi dong ho tren
+man hinh thiet bi. BAT la pin cua laptop, hien thi o icon pin ben trai.
 """
 
 import argparse
+import re
 import sys
 import threading
 import time
@@ -76,6 +78,7 @@ def format_console_line(m: dict) -> str:
         _fmt_metric("RAM", m["ram"]),
         _fmt_metric("GPU", m["gpu"]),
         _fmt_metric("VRAM", m["gpu_mem"]),
+        _fmt_metric("TEMP", m["temp"], warn=75, danger=85, unit="C"),
         _fmt_metric("WIFI", m["wifi"], warn=40, danger=20, invert=True),
         _fmt_metric("BAT", m["bat"], warn=30, danger=15, invert=True),
     ]
@@ -156,6 +159,104 @@ def _wmi_gpu_mem_percent() -> int | None:
     """% bo nho GPU da dung (dedicated + shared) tren tong AdapterRAM khai bao.
     Doc tu cache duoc thread nen cap nhat, khong bao gio block vong lap gui chinh."""
     return _gpu_mem_cache["val"]
+
+
+# Nhiet do CPU: Windows khong co API chuan/on dinh cho viec nay (psutil.sensors_temperatures()
+# hau nhu luon rong tren Windows, va namespace WMI cua LibreHardwareMonitor khong phai lam nao/
+# ban nao cung tu dong dang ky - da thu va bi loi "invalid namespace" ngay ca khi chay Admin).
+# Thay vao do doc tu "Remote Web Server" co san cua LibreHardwareMonitor/OpenHardwareMonitor
+# (Options > Remote Web Server > Run trong app, mac dinh port 8085) - cho ra JSON qua HTTP thuan,
+# khong can quyen Admin, khong phu thuoc WMI. Neu server chua bat/chua co: TEMP se la -1 nhu cac
+# chi so khong doc duoc khac.
+TEMP_THROTTLE_SEC = 5.0
+HWMONITOR_WEB_URLS = ("http://localhost:8085/data.json", "http://127.0.0.1:8085/data.json")
+_temp_cache = {"val": None}
+_TEMP_HTTP_OK = False
+
+
+def _find_cpu_temp_node(node: dict) -> int | None:
+    """Duyet de quy cay JSON cua LibreHardwareMonitor Web Server, tim node nhiet do CPU tot nhat.
+    Cau truc: moi node co 'Text' (ten), 'Children' (list), va la (leaf) thi co 'Value' dang chuoi
+    "45.0 C" hoac tuong tu. Uu tien node ten chua 'package'/'tctl'/'tdie' (nhiet do tong CPU),
+    neu khong tim thay uu tien nao thi lay gia tri lon nhat trong cac node nhiet do duoi 1 khoi
+    co ten chua 'cpu' (vd cac core rieng le)."""
+    best_priority: float | None = None
+    best_fallback: float | None = None
+
+    def parse_celsius(text: str) -> float | None:
+        # Vi du thuc te tu LibreHardwareMonitor: "74.0 °C" (dau do C). Ky tu "°" doi khi bi
+        # loi encoding (vd thanh "�") tuy nguon/console, nen KHONG dua vao vi tri ky tu do -
+        # chi lay phan so o DAU chuoi bang regex, va rieng kiem tra co chu 'C' (khong phan biet
+        # hoa/thuong) o dau chuoi con lai de chac chan day la don vi nhiet do (khong phai %/V/W/MHz).
+        text = text.strip()
+        m = re.match(r"^(-?\d+(?:\.\d+)?)\s*(.*)$", text)
+        if not m:
+            return None
+        number_str, unit = m.group(1), m.group(2)
+        if "c" not in unit.lower():
+            return None
+        try:
+            return float(number_str)
+        except ValueError:
+            return None
+
+    def walk(n: dict, under_cpu: bool):
+        nonlocal best_priority, best_fallback
+        name = (n.get("Text") or "")
+        name_l = name.lower()
+        is_cpu_branch = under_cpu or "cpu" in name_l
+        children = n.get("Children") or []
+        if not children:
+            val = parse_celsius(n.get("Value", ""))
+            if val is not None and is_cpu_branch:
+                if "package" in name_l or "tctl" in name_l or "tdie" in name_l:
+                    if best_priority is None or val > best_priority:
+                        best_priority = val
+                else:
+                    if best_fallback is None or val > best_fallback:
+                        best_fallback = val
+            return
+        for child in children:
+            walk(child, is_cpu_branch)
+
+    walk(node, False)
+    chosen = best_priority if best_priority is not None else best_fallback
+    return int(round(chosen)) if chosen is not None else None
+
+
+if sys.platform.startswith("win"):
+    try:
+        def _temp_http_worker():
+            import json
+            import urllib.request
+
+            while True:
+                val = None
+                for url in HWMONITOR_WEB_URLS:
+                    try:
+                        with urllib.request.urlopen(url, timeout=2) as resp:
+                            data = json.load(resp)
+                        val = _find_cpu_temp_node(data)
+                        break
+                    except Exception:
+                        continue
+                _temp_cache["val"] = max(0, min(100, val)) if val is not None else None
+                time.sleep(TEMP_THROTTLE_SEC)
+
+        threading.Thread(target=_temp_http_worker, daemon=True).start()
+        _TEMP_HTTP_OK = True
+    except Exception:
+        _TEMP_HTTP_OK = False
+
+
+def get_cpu_temp() -> int:
+    """Nhiet do CPU theo do C (0-100, kep an toan). Tra -1 neu khong doc duoc (LibreHardwareMonitor/
+    OpenHardwareMonitor chua chay, hoac chua bat Options > Remote Web Server > Run trong app)."""
+    if _TEMP_HTTP_OK:
+        val = _temp_cache["val"]
+        if val is not None:
+            return val
+    return -1
 
 
 PICO_VID_PID = {
@@ -343,6 +444,7 @@ def gather_metrics() -> dict:
         "gpu": get_gpu_percent(),
         "gpu_mem": get_gpu_mem_percent(),
         "wifi": get_wifi_percent(),
+        "temp": get_cpu_temp(),
         "time": get_time_str(),
         "date": get_date_str(),
         "bat": get_battery_percent(),
@@ -351,7 +453,7 @@ def gather_metrics() -> dict:
 
 def build_payload(m: dict) -> str:
     return (
-        f"CPU:{m['cpu']};RAM:{m['ram']};GPU:{m['gpu']};GPUMEM:{m['gpu_mem']};WIFI:{m['wifi']};"
+        f"CPU:{m['cpu']};RAM:{m['ram']};GPU:{m['gpu']};GPUMEM:{m['gpu_mem']};WIFI:{m['wifi']};TEMP:{m['temp']};"
         f"TIME:{m['time']};DATE:{m['date']};BAT:{m['bat']}\n"
     )
 

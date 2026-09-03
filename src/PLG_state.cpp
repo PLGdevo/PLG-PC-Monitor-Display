@@ -76,6 +76,7 @@ int8_t chart_ram[CHART_SAMPLES];
 int8_t chart_gpu[CHART_SAMPLES];
 int8_t chart_gpumem[CHART_SAMPLES];
 int8_t chart_wifi[CHART_SAMPLES];
+int8_t chart_temp[CHART_SAMPLES];
 bool taskmanager_dirty = false;
 char serial_line_buf[112];
 uint8_t serial_line_len = 0;

@@ -5,7 +5,7 @@
 #include "PLG_theme.h"
 #include "PLG_display.h"
 
-void get_chart_layout(ChartLayout out[5])
+void get_chart_layout(ChartLayout out[6])
 {
     const int16_t fullW = 300, topH = 80, midH = 58, botH = 54;
     const int16_t startX = 10, gapX = 8, gapY = 6, startY = 26;
@@ -17,7 +17,10 @@ void get_chart_layout(ChartLayout out[5])
     out[1] = {(int16_t)(startX + halfW + gapX), startY, halfW, topH}; // RAM
     out[2] = {startX, midY, halfW, midH};                             // GPU 3D
     out[3] = {(int16_t)(startX + halfW + gapX), midY, halfW, midH};   // GPU memory
-    out[4] = {startX, botY, fullW, botH};                             // WIFI
+    // WIFI truoc day chiem tron hang duoi (fullW) - chia doi voi TEMP de co cho hien them
+    // nhiet do CPU, moi o gio bang nua chieu rong nhu 4 o phia tren.
+    out[4] = {startX, botY, halfW, botH};                           // WIFI
+    out[5] = {(int16_t)(startX + halfW + gapX), botY, halfW, botH}; // TEMP (nhiet do CPU)
 }
 
 void draw_chart_frame(int16_t x, int16_t y, int16_t w, int16_t h)
@@ -26,22 +29,23 @@ void draw_chart_frame(int16_t x, int16_t y, int16_t w, int16_t h)
     myTFT.TFTdrawRoundRect(x, y, w, h, 4, UI_BORDER);
 }
 
-// luu buf da ve lan truoc cho toi da 5 chart (CPU/RAM/GPU/GPUMEM/WIFI) de phat hien "khong doi
-// gi ca" va bo qua hoan toan lan ve do (xem draw_chart_data) - -2 (ngoai khoang hop le -1..100)
-// danh dau "chua ve lan nao" nen lan dau luon ve du chartId gi.
-static int8_t last_drawn_buf[5][CHART_SAMPLES];
-static bool last_drawn_valid[5] = {false, false, false, false, false};
+// luu buf da ve lan truoc cho toi da 6 chart (CPU/RAM/GPU/GPUMEM/WIFI/TEMP) de phat hien "khong
+// doi gi ca" va bo qua hoan toan lan ve do (xem draw_chart_data) - -2 (ngoai khoang hop le
+// -1..100) danh dau "chua ve lan nao" nen lan dau luon ve du chartId gi.
+static const int CHART_CACHE_COUNT = 6;
+static int8_t last_drawn_buf[CHART_CACHE_COUNT][CHART_SAMPLES];
+static bool last_drawn_valid[CHART_CACHE_COUNT] = {false, false, false, false, false, false};
 
 void reset_chart_cache()
 {
-    for (int i = 0; i < 5; i++)
+    for (int i = 0; i < CHART_CACHE_COUNT; i++)
         last_drawn_valid[i] = false;
 }
 
 void draw_chart_data(int16_t x, int16_t y, int16_t w, int16_t h, const char *label, int8_t *buf, uint16_t lineColor,
-                      int warnAt, const char *warnText, int8_t chartId)
+                      int warnAt, const char *warnText, int8_t chartId, const char *unit)
 {
-    bool haveCache = (chartId >= 0 && chartId < 5);
+    bool haveCache = (chartId >= 0 && chartId < CHART_CACHE_COUNT);
     if (haveCache && last_drawn_valid[chartId] && memcmp(last_drawn_buf[chartId], buf, CHART_SAMPLES) == 0)
         return; // du lieu giong het lan ve truoc -> bo qua, tranh chop hinh khong can thiet
     if (haveCache)
@@ -94,9 +98,9 @@ void draw_chart_data(int16_t x, int16_t y, int16_t w, int16_t h, const char *lab
     if (last_val < 0)
         snprintf(label_txt, sizeof(label_txt), "%s  --", label);
     else if (warn && warnText != nullptr)
-        snprintf(label_txt, sizeof(label_txt), "%s %d%% %s", label, last_val, warnText);
+        snprintf(label_txt, sizeof(label_txt), "%s %d%s %s", label, last_val, unit, warnText);
     else
-        snprintf(label_txt, sizeof(label_txt), "%s  %d%%", label, last_val);
+        snprintf(label_txt, sizeof(label_txt), "%s  %d%s", label, last_val, unit);
     myTFT.TFTdrawText(x + 6, y + 3, label_txt, textCol, UI_PANEL, 2);
 
     myTFT.TFTdrawRoundRect(x, y, w, h, 4, warn ? UI_DANGER : UI_BORDER); // vien do khi bao dong
