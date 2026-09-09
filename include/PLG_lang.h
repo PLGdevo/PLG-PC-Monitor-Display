@@ -16,6 +16,9 @@ const char *lang_hint_apply();
 // ten hien thi cua 1 ngon ngu theo index (0=VI, 1=EN), dung cho man hinh chon ngon ngu
 const char *lang_name(int8_t index);
 
+// ten hien thi cua 1 kieu dong ho theo index (0=DIGITAL, 1=ANALOG), dung cho man hinh chon kieu dong ho
+const char *lang_clock_style_name(int8_t index);
+
 // nhan 1 ky tu ("C"/"R") hien thi cung hang thanh pin tren man hinh dong ho - khe rat hep, phai
 // ket thuc truoc x=255 (gioi han uint8_t cua TFTdrawText), xem draw_clock_cpu_ram trong PLG_screens.cpp
 const char *lang_label_cpu();

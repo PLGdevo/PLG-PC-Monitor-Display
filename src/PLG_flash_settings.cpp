@@ -10,7 +10,7 @@
 #define SETTINGS_FLASH_OFFSET (PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE)
 #define SETTINGS_MAGIC 0xA5
 
-void save_settings_to_flash(uint8_t colorIdx, uint8_t clockFontIdx, uint8_t clockSize, uint8_t languageIdx)
+void save_settings_to_flash(uint8_t colorIdx, uint8_t clockFontIdx, uint8_t clockSize, uint8_t languageIdx, uint8_t clockStyleIdx)
 {
     uint8_t buf[FLASH_PAGE_SIZE];
     memset(buf, 0xFF, sizeof(buf));
@@ -19,6 +19,7 @@ void save_settings_to_flash(uint8_t colorIdx, uint8_t clockFontIdx, uint8_t cloc
     buf[2] = clockFontIdx;
     buf[3] = clockSize;
     buf[4] = languageIdx;
+    buf[5] = clockStyleIdx;
 
     uint32_t ints = save_and_disable_interrupts();
     flash_range_erase(SETTINGS_FLASH_OFFSET, FLASH_SECTOR_SIZE);
@@ -52,5 +53,9 @@ void load_settings_from_flash()
     if (flash_data[4] < UI_LANG_COUNT)
     {
         ui_language = flash_data[4];
+    }
+    if (flash_data[5] < CLOCK_STYLE_COUNT)
+    {
+        active_clock_style = flash_data[5];
     }
 }

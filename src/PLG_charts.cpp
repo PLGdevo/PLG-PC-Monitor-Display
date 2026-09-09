@@ -43,8 +43,10 @@ void reset_chart_cache()
 }
 
 void draw_chart_data(int16_t x, int16_t y, int16_t w, int16_t h, const char *label, int8_t *buf, uint16_t lineColor,
-                      int warnAt, const char *warnText, int8_t chartId, const char *unit)
+                      int warnAt, const char *warnText, int8_t chartId, const char *unit, int scaleMax)
 {
+    if (scaleMax < 1)
+        scaleMax = 1; // tranh chia cho 0 neu goi voi gia tri max <= 0
     bool haveCache = (chartId >= 0 && chartId < CHART_CACHE_COUNT);
     if (haveCache && last_drawn_valid[chartId] && memcmp(last_drawn_buf[chartId], buf, CHART_SAMPLES) == 0)
         return; // du lieu giong het lan ve truoc -> bo qua, tranh chop hinh khong can thiet
@@ -79,8 +81,8 @@ void draw_chart_data(int16_t x, int16_t y, int16_t w, int16_t h, const char *lab
             continue;
         int16_t x0 = x + 4 + (i * (w - 8)) / (CHART_SAMPLES - 1);
         int16_t x1 = x + 4 + ((i + 1) * (w - 8)) / (CHART_SAMPLES - 1);
-        int16_t y0 = plotBottom - (buf[i] * plotH) / 100;
-        int16_t y1 = plotBottom - (buf[i + 1] * plotH) / 100;
+        int16_t y0 = plotBottom - (buf[i] * plotH) / scaleMax;
+        int16_t y1 = plotBottom - (buf[i + 1] * plotH) / scaleMax;
         // 1 net (khong ve chong 2px nhu truoc) - giam mot nua so lan goi ve line moi lan cap
         // nhat, ve nhanh hon -> bot chop hinh (thay bang 1 diem tron nho o cuoi cho de nhin)
         myTFT.TFTdrawLine(x0, y0, x1, y1, lineColor);
@@ -89,7 +91,7 @@ void draw_chart_data(int16_t x, int16_t y, int16_t w, int16_t h, const char *lab
     if (last_val >= 0)
     {
         int16_t lastX = x + w - 4;
-        int16_t lastY = plotBottom - (last_val * plotH) / 100;
+        int16_t lastY = plotBottom - (last_val * plotH) / scaleMax;
         myTFT.TFTfillCircle(lastX, lastY, 2, lineColor); // diem cuoi noi bat
     }
 

@@ -20,9 +20,13 @@ void draw_chart_frame(int16_t x, int16_t y, int16_t w, int16_t h);
 // chartId (0-4, ung voi CPU/RAM/GPU/GPUMEM/WIFI trong MONITOR_TASKMANAGER): dung de cache mau
 // du lieu da ve lan truoc - neu buf khong doi so voi lan ve truoc thi bo qua hoan toan (khong
 // xoa/ve lai), tranh chop hinh khi mot chart dung yen trong khi cac chart khac van cap nhat.
-// unit: hau to don vi hien sau %/gia tri (vd "%" cho CPU/RAM/GPU/WIFI, "C" cho nhiet do)
+// unit: hau to don vi hien sau %/gia tri (vd "%" cho CPU/RAM/GPU, "Mbps" cho WIFI, "C" cho nhiet do)
+// scaleMax: gia tri ung voi dinh truc Y khi ve duong (mac dinh 100, dung cho cac chi so %).
+// WIFI (toc do mang, khong co tran co dinh) truyen vao max gan day cua chinh no de
+// "auto-scale" truc theo toc do thuc te thay vi ep coi 100 la toc do toi da.
 void draw_chart_data(int16_t x, int16_t y, int16_t w, int16_t h, const char *label, int8_t *buf, uint16_t lineColor,
-                      int warnAt = 101, const char *warnText = nullptr, int8_t chartId = -1, const char *unit = "%");
+                      int warnAt = 101, const char *warnText = nullptr, int8_t chartId = -1, const char *unit = "%",
+                      int scaleMax = 100);
 
 // bat buoc lan goi draw_chart_data ke tiep (voi chartId hop le) phai ve lai du buf co giong lan
 // truoc hay khong - goi khi vung ve bi xoa tu ben ngoai (vd MONITOR_TASKMANAGER xoa toan man

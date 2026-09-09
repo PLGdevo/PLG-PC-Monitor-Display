@@ -68,7 +68,8 @@ extern MONITOR_DESTOP desktop_state;
 #define FUNTION_MODE_FONT 5  // chon de vao man hinh chon kieu chu so cho dong ho
 #define FUNTION_MODE_TASK 6  // chon de mo man hinh Task Manager (CPU/RAM/GPU/WIFI)
 #define FUNTION_MODE_LANGUAGE 7 // chon de mo man hinh doi ngon ngu giao dien (VI/EN)
-#define FUNTION_MODE_COUNT 8
+#define FUNTION_MODE_CLOCK_STYLE 8 // chon de mo man hinh chon kieu hien thi dong ho: SO (digital) / KIM (analog)
+#define FUNTION_MODE_COUNT 9
 
 extern int8_t color_index;
 extern int8_t last_color_index;
@@ -90,6 +91,22 @@ extern int8_t last_clock_size_index; // -1 khi vua vao/can ve lai toan bo
 extern int8_t active_clock_size;     // co chu (size) dang duoc ap dung cho dong ho, luu vao flash
 extern bool show_font_size;          // true khi dang xem man hinh chon CO CHU (buoc 2, sau khi da chon HO CHU)
 extern bool last_show_font_size;
+
+/*------------------- Kieu hien thi dong ho: SO (digital, ho/co chu o tren) / KIM (analog) -------------------*/
+// co 3 bien the KIM (analog) khac nhau ve mat dong ho (CLASSIC/MINIMAL/BOLD) - dung
+// IS_CLOCK_STYLE_ANALOG(s) thay vi so sanh == CLOCK_STYLE_ANALOG_CLASSIC de kiem tra "co phai kim khong"
+// (bao gom ca 3 bien the), tranh phai sua nhieu noi moi khi them/bot bien the.
+#define CLOCK_STYLE_DIGITAL 0
+#define CLOCK_STYLE_ANALOG_CLASSIC 1 // mat hien tai: vien tron + so 12/3/6/9 + vach chia
+#define CLOCK_STYLE_ANALOG_MINIMAL 2 // toi gian: khong so, chi vach gio to + kim manh
+#define CLOCK_STYLE_ANALOG_BOLD 3    // dam: cham tron danh dau gio thay so, kim day, vien mau nhan dien
+#define CLOCK_STYLE_COUNT 4
+#define IS_CLOCK_STYLE_ANALOG(s) ((s) >= CLOCK_STYLE_ANALOG_CLASSIC && (s) <= CLOCK_STYLE_ANALOG_BOLD)
+extern int8_t clock_style_index;      // muc dang duyet trong man hinh chon kieu dong ho (nhu color_index)
+extern int8_t last_clock_style_index; // -1 khi vua vao/can ve lai toan bo
+extern int8_t active_clock_style;     // kieu dang duoc ap dung cho dong ho, luu vao flash
+extern bool show_clock_style;         // true khi dang xem man hinh chon kieu dong ho
+extern bool last_show_clock_style;
 
 extern bool menu_needs_full_draw; // true khi vua vao menu SETTING -> ve lai tat ca
 

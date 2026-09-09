@@ -77,6 +77,8 @@ void loop()
             MONITOR_FONT_SIZE();
         else if (show_language)
             MONITOR_LANGUAGE();
+        else if (show_clock_style)
+            MONITOR_CLOCK_STYLE();
         else
             MONITOR_FUNTION();
         break;

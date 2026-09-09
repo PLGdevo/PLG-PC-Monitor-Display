@@ -1,6 +1,7 @@
 #include "PLG_screens.h"
 #include <string.h>
 #include <stdio.h>
+#include <math.h>
 #include "pico/stdlib.h"
 #include "PLG_state.h"
 #include "PLG_theme.h"
@@ -245,7 +246,14 @@ void MONITOR_TASKMANAGER()
         // "  NNC" se lam ky tu cuoi tinh ra vi tri >255 va tran ve dau man hinh - dung "TMP" (3
         // ky tu, bang do dai voi "RAM"/"MEM" da an toan) va KHONG dung warnText (vd "HOT") vi
         // ngay ca voi nhan ngan, chuoi canh bao dai them se lai vuot qua nguong an toan nay.
-        draw_chart_data(c[4].x, c[4].y, c[4].w, c[4].h, "WIFI", chart_wifi, UI_WIFI, 101, nullptr, 4);
+        // Toc do mang (Mbps) khong co tran co dinh nhu %, nen "auto-scale" truc Y theo
+        // gia tri lon nhat dang co trong chinh bieu do nay (toi thieu 10 de tranh truc
+        // bi "phong to" qua muc khi mang gan nhu khong co traffic).
+        int wifiScaleMax = 10;
+        for (int i = 0; i < CHART_SAMPLES; i++)
+            if (chart_wifi[i] > wifiScaleMax)
+                wifiScaleMax = chart_wifi[i];
+        draw_chart_data(c[4].x, c[4].y, c[4].w, c[4].h, "NET", chart_wifi, UI_WIFI, 101, nullptr, 4, "Mbps", wifiScaleMax);
         draw_chart_data(c[5].x, c[5].y, c[5].w, c[5].h, "TMP", chart_temp, UI_TEMP, 101, nullptr, 5, "C");
 
         taskmanager_dirty = false;
@@ -329,13 +337,23 @@ static void draw_menu_carousel_labels()
         // xoa vung chu cu (chua cham vien khung, chi phan ruot ben trong)
         myTFT.TFTfillRect(CAR_BOX_X + 3, y + 2, CAR_BOX_W - 6, h - 4, bg);
 
-        int16_t charW = (int16_t)(6 * size);
+        // label qua dai (vd "CLOCK STYLE") co the vuot khung o size mac dinh cua khe -> tu giam
+        // size cho toi khi vua khung (toi thieu size 1) de khong bao gio ve tran ra ngoai khung/man hinh.
+        uint8_t textSize = size;
+        int16_t charW = (int16_t)(6 * textSize);
         int16_t textW = (int16_t)strlen(labels[idx]) * charW;
+        while (textW > CAR_BOX_W - 6 && textSize > 1)
+        {
+            textSize--;
+            charW = (int16_t)(6 * textSize);
+            textW = (int16_t)strlen(labels[idx]) * charW;
+        }
+
         int16_t tx = 160 - textW / 2; // can giua theo truc doc man hinh (320/2)
         if (tx < 0)
             tx = 0;
-        int16_t ty = y + (h - 8 * size) / 2;
-        myTFT.TFTdrawText(tx, ty, (char *)labels[idx], fg, bg, size);
+        int16_t ty = y + (h - 8 * textSize) / 2;
+        myTFT.TFTdrawText(tx, ty, (char *)labels[idx], fg, bg, textSize);
     }
 }
 
@@ -558,9 +576,194 @@ static void draw_clock_cpu_ram()
     myTFT.TFTdrawText(startX + cpuW + CLOCK_STAT_GAP, y, ramText, UI_RAM, UI_BG, 3); // dong bo mau voi bieu do RAM
 }
 
+/*------------------- Man hinh dong ho KIM (analog) -------------------*/
+// mat tron can giua vung noi dung (y=24..240): tam (160,128), ban kinh 88 -> vua khit chieu cao
+// 216px (128-88=40>24, 128+88=216<240), khong cham status bar/canh man hinh.
+static const int16_t CLOCK_CX = 160, CLOCK_CY = 128, CLOCK_R = 88;
+
+// bang luong giac 60 vi tri (moi vi tri = 6 do = 1 "vach phut"), tinh 1 lan bang sinf/cosf luc
+// dung lan dau - dung chung cho vach chia + ca 3 kim (kim gio quy ve 1 trong 60 vi tri theo
+// (gio%12)*60+phut chia 12, kim phut/giay dung thang chi so phut/giay) de khong phai goi lai
+// sinf/cosf moi giay (chi 1 phep nhan cho moi diem can ve).
+static float clock_sin_tab[60];
+static float clock_cos_tab[60];
+static bool clock_tab_ready = false;
+static void clock_build_trig_table()
+{
+    if (clock_tab_ready)
+        return;
+    for (int i = 0; i < 60; i++)
+    {
+        // -90 do de vi tri 0 nam o dinh (12h), tang dan theo chieu kim dong ho giong mat dong ho that
+        float angle = (float)i * 6.0f * (3.14159265f / 180.0f) - (3.14159265f / 2.0f);
+        clock_sin_tab[i] = sinf(angle);
+        clock_cos_tab[i] = cosf(angle);
+    }
+    clock_tab_ready = true;
+}
+
+// ve 1 kim dang hinh thoi/mui ten (tam -> mui nhon tai vi tri idx, day kim rong halfWidth ở
+// 2 ben tam) bang TFTfillTriangle; goc vuong cua day tinh bang cach lech idx di 15 vi tri (90 do)
+// trong cung bang luong giac, tranh phai tinh vector vuong goc rieng.
+static void draw_clock_hand(int8_t idx, int16_t length, int16_t halfWidth, uint16_t color)
+{
+    int16_t tipX = CLOCK_CX + (int16_t)(clock_cos_tab[idx] * length);
+    int16_t tipY = CLOCK_CY + (int16_t)(clock_sin_tab[idx] * length);
+    int8_t perp = (int8_t)((idx + 15) % 60);
+    int16_t baseX1 = CLOCK_CX + (int16_t)(clock_cos_tab[perp] * halfWidth);
+    int16_t baseY1 = CLOCK_CY + (int16_t)(clock_sin_tab[perp] * halfWidth);
+    int16_t baseX2 = CLOCK_CX - (int16_t)(clock_cos_tab[perp] * halfWidth);
+    int16_t baseY2 = CLOCK_CY - (int16_t)(clock_sin_tab[perp] * halfWidth);
+    myTFT.TFTfillTriangle(tipX, tipY, baseX1, baseY1, baseX2, baseY2, color);
+}
+
+// tra ve thong so kim gio/kim phut (do dai, do day, mau) ung voi bien the KIM dang chon
+// (CLASSIC/MINIMAL/BOLD) - dung chung cho ca draw_analog_hands va phan ve-lai-bu trong
+// draw_analog_second_hand de 2 noi luon khop nhau, tranh kim vo tinh doi kich thuoc giua 2 lan ve.
+static void get_analog_hand_params(int16_t &hourLen, int16_t &hourHW, uint16_t &hourColor,
+                                    int16_t &minLen, int16_t &minHW, uint16_t &minColor)
+{
+    switch (active_clock_style)
+    {
+    case CLOCK_STYLE_ANALOG_MINIMAL: // kim manh, thanh thoat
+        hourLen = CLOCK_R - 45; hourHW = 2; hourColor = UI_TEXT;
+        minLen = CLOCK_R - 22; minHW = 2; minColor = UI_ACCENT;
+        break;
+    case CLOCK_STYLE_ANALOG_BOLD: // kim day, noi bat
+        hourLen = CLOCK_R - 48; hourHW = 7; hourColor = UI_TEXT;
+        minLen = CLOCK_R - 20; minHW = 6; minColor = UI_ACCENT;
+        break;
+    default: // CLASSIC
+        hourLen = CLOCK_R - 45; hourHW = 4; hourColor = UI_TEXT;
+        minLen = CLOCK_R - 22; minHW = 3; minColor = UI_ACCENT;
+        break;
+    }
+}
+
+// ve phan TINH cua mat dong ho: vien tron + vach chia/cham gio + so 12/3/6/9 (tuy bien the). Chi goi
+// khi vua vao man hinh hoac khi PHUT doi (cung luc voi kim gio/phut) - khong dinh lieu gi toi kim
+// giay nen khong bao gio can ve lai vi kim giay (tranh phai xoa/ve lai ca mat dong ho moi giay).
+static void draw_analog_face()
+{
+    if (active_clock_style == CLOCK_STYLE_ANALOG_BOLD)
+    {
+        // vien day 2px mau nhan dien, noi bat hon vien mong mac dinh
+        myTFT.TFTdrawCircle(CLOCK_CX, CLOCK_CY, CLOCK_R, UI_ACCENT);
+        myTFT.TFTdrawCircle(CLOCK_CX, CLOCK_CY, CLOCK_R - 1, UI_ACCENT);
+    }
+    else
+    {
+        myTFT.TFTdrawCircle(CLOCK_CX, CLOCK_CY, CLOCK_R, UI_BORDER);
+    }
+
+    for (int i = 0; i < 60; i++)
+    {
+        bool major = (i % 5 == 0); // vach/cham gio (12 vi tri)
+
+        if (active_clock_style == CLOCK_STYLE_ANALOG_BOLD)
+        {
+            if (!major)
+                continue; // BOLD: bo vach phut, chi giu 12 cham gio cho gon-manh
+            int16_t dotR = CLOCK_R - 8;
+            int16_t dx = CLOCK_CX + (int16_t)(clock_cos_tab[i] * dotR);
+            int16_t dy = CLOCK_CY + (int16_t)(clock_sin_tab[i] * dotR);
+            myTFT.TFTfillCircle(dx, dy, (i % 15 == 0) ? 4 : 3, UI_ACCENT); // 12/3/6/9 to hon chut
+            continue;
+        }
+
+        int16_t outer = CLOCK_R - 3;
+        int16_t inner = major ? (CLOCK_R - 13) : (CLOCK_R - 7);
+        int16_t ox = CLOCK_CX + (int16_t)(clock_cos_tab[i] * outer);
+        int16_t oy = CLOCK_CY + (int16_t)(clock_sin_tab[i] * outer);
+        int16_t ix = CLOCK_CX + (int16_t)(clock_cos_tab[i] * inner);
+        int16_t iy = CLOCK_CY + (int16_t)(clock_sin_tab[i] * inner);
+        myTFT.TFTdrawLine(ix, iy, ox, oy, major ? UI_TEXT : UI_TEXT_FAINT);
+    }
+
+    // so 12/3/6/9 (size2): chi ve o bien the CLASSIC - MINIMAL bo so de toi gian, BOLD dung cham thay so
+    if (active_clock_style == CLOCK_STYLE_ANALOG_CLASSIC)
+    {
+        myTFT.TFTdrawText(CLOCK_CX - 7, CLOCK_CY - CLOCK_R + 10, (char *)"12", UI_TEXT, UI_BG, 2);
+        myTFT.TFTdrawText(CLOCK_CX + CLOCK_R - 18, CLOCK_CY - 8, (char *)"3", UI_TEXT, UI_BG, 2);
+        myTFT.TFTdrawText(CLOCK_CX - 6, CLOCK_CY + CLOCK_R - 24, (char *)"6", UI_TEXT, UI_BG, 2);
+        myTFT.TFTdrawText(CLOCK_CX - CLOCK_R + 10, CLOCK_CY - 8, (char *)"9", UI_TEXT, UI_BG, 2);
+    }
+}
+
+// kim giay: do dai (CLOCK_R-30=58) CO CHU Y giu NGAN HON vong vach chia (bat dau tu CLOCK_R-13=75)
+// de duong kim khong bao gio quet qua vach/so - nho vay moi giay chi can XOA dung 1 duong thang
+// cu (ve lai bang mau nen) roi VE duong moi, khong dung xoa/ve lai ca mat dong ho -> het choi/nhap nhay.
+// Toa do kim cu luu qua bien tinh (last_sec_x/y); has_last_sec=false = "chua ve lan nao" (moi vao man hinh).
+static int16_t last_sec_x = 0, last_sec_y = 0;
+static bool has_last_sec = false;
+static void reset_analog_second_hand() { has_last_sec = false; }
+
+// kim gio/phut: luu lai idx da ve lan truoc de XOA dung hinh tam giac cu (ve lai bang mau nen)
+// truoc khi ve kim moi - neu khong, phan tam giac cu khong bi kim moi che se de lai vet nhoe.
+static int8_t last_hour_idx = -1, last_min_idx = -1;
+static bool has_last_hands = false;
+static void reset_analog_hour_min_hands() { has_last_hands = false; }
+
+static void draw_analog_second_hand(int8_t secIdx)
+{
+    if (has_last_sec)
+    {
+        myTFT.TFTdrawLine(CLOCK_CX, CLOCK_CY, last_sec_x, last_sec_y, UI_BG); // xoa kim giay cu
+        // duong xoa co the de len vung tam giac cua kim gio/phut (kim giay luot qua) va xoa mat
+        // 1 phan cua chung -> ve lai 2 kim nay ngay sau de bu, re hon nhieu so voi ve lai ca mat dong ho.
+        if (has_last_hands)
+        {
+            int16_t hourLen, hourHW, minLen, minHW;
+            uint16_t hourColor, minColor;
+            get_analog_hand_params(hourLen, hourHW, hourColor, minLen, minHW, minColor);
+            draw_clock_hand(last_hour_idx, hourLen, hourHW, hourColor);
+            draw_clock_hand(last_min_idx, minLen, minHW, minColor);
+        }
+    }
+
+    int16_t x = CLOCK_CX + (int16_t)(clock_cos_tab[secIdx] * (CLOCK_R - 30));
+    int16_t y = CLOCK_CY + (int16_t)(clock_sin_tab[secIdx] * (CLOCK_R - 30));
+    myTFT.TFTdrawLine(CLOCK_CX, CLOCK_CY, x, y, UI_DANGER);
+    last_sec_x = x;
+    last_sec_y = y;
+    has_last_sec = true;
+
+    // kim giay xuat phat tu chinh tam nen luon de len truc giua - ve lai truc tren cung moi giay
+    myTFT.TFTfillCircle(CLOCK_CX, CLOCK_CY, 3, UI_ACCENT);
+}
+
+// ve mat dong ho (khi vua vao man hinh hoac PHUT doi) + kim gio/phut ung voi gio:phut (24h) hien tai.
+static void draw_analog_hands(int hh, int mm)
+{
+    clock_build_trig_table();
+    draw_analog_face();
+
+    int8_t hourIdx = (int8_t)((((hh % 12) * 60 + mm) / 12) % 60);
+    int8_t minIdx = (int8_t)(mm % 60);
+
+    int16_t hourLen, hourHW, minLen, minHW;
+    uint16_t hourColor, minColor;
+    get_analog_hand_params(hourLen, hourHW, hourColor, minLen, minHW, minColor);
+
+    // xoa kim gio/phut cu (dung mau nen) truoc khi ve kim moi, tranh de lai vet nhoe hinh tam giac
+    if (has_last_hands)
+    {
+        draw_clock_hand(last_hour_idx, hourLen, hourHW, UI_BG);
+        draw_clock_hand(last_min_idx, minLen, minHW, UI_BG);
+    }
+
+    draw_clock_hand(hourIdx, hourLen, hourHW, hourColor); // kim gio: ngan, day
+    draw_clock_hand(minIdx, minLen, minHW, minColor);     // kim phut: dai hon, mau nhan dien
+
+    last_hour_idx = hourIdx;
+    last_min_idx = minIdx;
+    has_last_hands = true;
+}
+
 // man hinh dong ho: hien gio (12h + AM/PM) + ngay hien tai (nhan tu monitor.py qua serial,
 // truong TIME/DATE). Gio ve theo ho/co chu dang chon trong SETTING > FONT
-// (active_clock_font/active_clock_size).
+// (active_clock_font/active_clock_size), tru khi active_clock_style dang la ANALOG (SETTING >
+// CLOCK STYLE) - khi do ve mat dong ho kim thay vi so dien tu.
 void MONITOR_CLOCK()
 {
     MONITOR_STATUS();
@@ -585,6 +788,29 @@ void MONITOR_CLOCK()
         // nam ngoai vung noi dung vua xoa o tren) khi chuyen tu Task Manager sang Clock
         myTFT.TFTfillRect(188, 4, 65, 17, UI_BG);
         reset_taskmanager_clock_cache(); // buoc ve lai gio do khi quay lai Task Manager
+        reset_analog_second_hand();      // buoc ve kim giay lan dau khong xoa nham vi tri cu (man hinh khac)
+        reset_analog_hour_min_hands();   // buoc ve kim gio/phut lan dau khong xoa nham vi tri cu (man hinh khac)
+    }
+
+    if (IS_CLOCK_STYLE_ANALOG(active_clock_style))
+    {
+        // dong ho kim: mat + kim gio/phut chi ve lai khi PHUT doi (so sanh 5 ky tu dau "HH:MM",
+        // bo qua ":SS"); kim giay ve lai MOI GIAY nhung chi xoa/ve DUNG 1 duong thang (xem
+        // draw_analog_second_hand) - khong dung xoa/ve lai ca mat dong ho moi giay -> het choi/nhap nhay.
+        if (clock_dirty)
+        {
+            int hh = (current_time_str[0] - '0') * 10 + (current_time_str[1] - '0');
+            int mm = (current_time_str[3] - '0') * 10 + (current_time_str[4] - '0');
+            int ss = (current_time_str[6] - '0') * 10 + (current_time_str[7] - '0');
+
+            if (strncmp(last_time_str, current_time_str, 5) != 0)
+                draw_analog_hands(hh, mm);
+            draw_analog_second_hand((int8_t)(ss % 60));
+
+            strcpy(last_time_str, current_time_str);
+            clock_dirty = false;
+        }
+        return;
     }
 
     draw_clock_cpu_ram();
@@ -827,5 +1053,51 @@ void MONITOR_LANGUAGE()
         draw_language_row(last_language_index, false);
         draw_language_row(language_index, true);
         last_language_index = language_index;
+    }
+}
+
+/*------------------- Man hinh chon kieu hien thi dong ho (SO DIEN TU / KIM) -------------------*/
+// ve 1 dong ten kieu dong ho (idx: 0=DIGITAL, 1=ANALOG), can giua man hinh; cau truc + vi tri
+// giong het draw_language_row (tai dung CLOCK_STYLE_COUNT thay UI_LANG_COUNT, cung 2 muc)
+static const int16_t CLOCK_STYLE_ROW_Y[CLOCK_STYLE_COUNT] = {50, 90, 130, 170};
+static void draw_clock_style_row(int8_t idx, bool selected)
+{
+    const char *name = lang_clock_style_name(idx);
+    int16_t textW = (int16_t)strlen(name) * 3 * (5 + 1); // size3
+    int16_t x = (320 - textW) / 2;
+    uint16_t fg = selected ? UI_ACCENT : UI_TEXT_DIM;
+    myTFT.TFTfillRect(0, CLOCK_STYLE_ROW_Y[idx] - 3, 320, 30, UI_BG);
+    myTFT.TFTdrawText(x, CLOCK_STYLE_ROW_Y[idx], (char *)name, fg, UI_BG, 3);
+}
+
+// dung encoder duyet qua SO DIEN TU/KIM (xem truoc ten kieu), nhan nut de ap dung va quay lai
+// menu SETTING. Cau truc tuong tu MONITOR_LANGUAGE.
+void MONITOR_CLOCK_STYLE()
+{
+    MONITOR_STATUS();
+
+    clock_style_index = (int8_t)(((clock_style_index % CLOCK_STYLE_COUNT) + CLOCK_STYLE_COUNT) % CLOCK_STYLE_COUNT);
+
+    if (last_show_clock_style != show_clock_style)
+    {
+        last_show_clock_style = show_clock_style;
+        myTFT.TFTfillRect(0, 24, 320, 216, UI_BG);
+        last_clock_style_index = -1;
+    }
+
+    if (last_clock_style_index < 0)
+    {
+        for (int8_t i = 0; i < CLOCK_STYLE_COUNT; i++)
+            draw_clock_style_row(i, i == clock_style_index);
+        const char *hint = lang_hint_apply();
+        int16_t hintX = (320 - (int16_t)strlen(hint) * 6) / 2;
+        myTFT.TFTdrawText(hintX, 210, (char *)hint, UI_TEXT_DIM, UI_BG, 1);
+        last_clock_style_index = clock_style_index;
+    }
+    else if (last_clock_style_index != clock_style_index)
+    {
+        draw_clock_style_row(last_clock_style_index, false);
+        draw_clock_style_row(clock_style_index, true);
+        last_clock_style_index = clock_style_index;
     }
 }

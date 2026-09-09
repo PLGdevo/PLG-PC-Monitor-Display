@@ -63,6 +63,12 @@ int8_t active_clock_size = 6; // co chu lon nhat cua SEVEN_SEG, mac dinh
 bool show_font_size = false;
 bool last_show_font_size = false;
 
+int8_t clock_style_index = 0;
+int8_t last_clock_style_index = -1;
+int8_t active_clock_style = CLOCK_STYLE_DIGITAL;
+bool show_clock_style = false;
+bool last_show_clock_style = false;
+
 bool menu_needs_full_draw = true;
 
 int8_t ui_language = UI_LANG_VI;

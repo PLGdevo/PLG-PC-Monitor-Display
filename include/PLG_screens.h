@@ -28,6 +28,10 @@ void MONITOR_COLOR();
 // quay lai menu SETTING.
 void MONITOR_LANGUAGE();
 
+// man hinh chon kieu hien thi dong ho: SO DIEN TU (digital, ho/co chu chon o FONT) hoac
+// KIM (analog, mat tron + kim gio/phut/giay). Nhan nut de ap dung (luu flash) va quay lai menu SETTING.
+void MONITOR_CLOCK_STYLE();
+
 // buoc 1/2 chon chu so dong ho: chon HO CHU (active_clock_font) trong 5 kieu co san.
 // Nhan nut de chuyen sang buoc 2 (MONITOR_FONT_SIZE) chon co chu cho ho vua chon.
 void MONITOR_FONT();

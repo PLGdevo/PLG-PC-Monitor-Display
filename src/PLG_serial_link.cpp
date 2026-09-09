@@ -4,12 +4,12 @@
 #include "pico/stdlib.h"
 #include "PLG_state.h"
 
-void chart_push(int8_t *buf, int value)
+void chart_push(int8_t *buf, int value, int cap)
 {
     if (value < 0)
         value = 0;
-    if (value > 100)
-        value = 100;
+    if (value > cap)
+        value = cap;
     memmove(buf, buf + 1, (CHART_SAMPLES - 1) * sizeof(int8_t));
     buf[CHART_SAMPLES - 1] = (int8_t)value;
 }
@@ -43,7 +43,7 @@ void read_taskmanager_serial()
                         chart_push(chart_ram, ram);
                         chart_push(chart_gpu, gpu);
                         chart_push(chart_gpumem, gpumem);
-                        chart_push(chart_wifi, wifi);
+                        chart_push(chart_wifi, wifi, 127); // WIFI: toc do mang Mbps, khong phai %, nen cap 127 (max int8_t)
                         taskmanager_dirty = true;
                     }
                     // TEMP la truong moi them sau (monitor.py cu chua gui): chi push khi co mat,
