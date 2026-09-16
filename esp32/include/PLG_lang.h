@@ -23,3 +23,16 @@ const char *lang_clock_style_name(int8_t index);
 // ket thuc truoc x=255 (gioi han uint8_t cua TFTdrawText), xem draw_clock_cpu_ram trong PLG_screens.cpp
 const char *lang_label_cpu();
 const char *lang_label_ram();
+
+/*------------------- Man hinh trang thai ket noi (BLE/WiFi) -------------------*/
+// tieu de "THIET BI BLUETOOTH" / "BLUETOOTH DEVICE"
+const char *lang_ble_title();
+
+// trang thai "Dang cho ket noi..." / "Waiting for connection..."
+const char *lang_status_waiting();
+
+// trang thai "Da ket noi" / "Connected"
+const char *lang_status_connected();
+
+// dong huong dan "Nhan nut de quay lai" (thoat man hinh trang thai ve menu SETTING)
+const char *lang_hint_back();

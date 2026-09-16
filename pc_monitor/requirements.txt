@@ -3,3 +3,6 @@ pyserial>=3.5
 pynvml>=11.5; sys_platform != "darwin"
 wmi>=1.5; sys_platform == "win32"
 colorama>=0.4.6
+# Chi can khi dung --ble (board ESP32-S3). Ban Pico/USB khong dung toi, va monitor.py
+# chi import bleak ben trong ham chay BLE nen thieu goi nay cung khong anh huong che do USB.
+bleak>=0.21

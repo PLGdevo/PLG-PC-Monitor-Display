@@ -131,6 +131,11 @@ extern int8_t last_connection_index;  // -1 khi vua vao/can ve lai toan bo
 extern bool show_connection;          // true khi dang xem man hinh chon giao thuc ket noi
 extern bool last_show_connection;
 
+// Man hinh trang thai BLE, hien ngay sau khi chon BLUETOOTH (thay vi quay thang ve menu):
+// nguoi dung can biet ten thiet bi de ghep noi tu PC va thay duoc da ket noi hay chua.
+extern bool show_ble_status;
+extern bool last_show_ble_status;
+
 /*------------------- PC Task Manager chart (nhan tu pc_monitor/monitor.py) -------------------*/
 // dinh dang du lieu nhan qua USB serial: "CPU:<int>;RAM:<int>;GPU:<int>;GPUMEM:<int>;WIFI:<int>;TEMP:<int>;TIME:..;DATE:..;BAT:<int>\n"
 #define CHART_SAMPLES 100 // so mau hien thi tren moi bieu do (= chieu rong bieu do, px)

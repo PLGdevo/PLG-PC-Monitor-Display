@@ -32,6 +32,10 @@ void MONITOR_LANGUAGE();
 // dung (goi transport_begin + luu NVS rieng qua transport_save_mode) va quay lai menu SETTING.
 void MONITOR_CONNECTION();
 
+// man hinh trang thai BLE: hien ten thiet bi de ghep noi tu PC + dang cho / da ket noi.
+// Hien ngay sau khi chon BLUETOOTH o MONITOR_CONNECTION; nhan nut de quay lai menu SETTING.
+void MONITOR_BLE_STATUS();
+
 // man hinh chon kieu hien thi dong ho: SO DIEN TU (digital, ho/co chu chon o FONT) hoac
 // KIM (analog, mat tron + kim gio/phut/giay). Nhan nut de ap dung (luu flash) va quay lai menu SETTING.
 void MONITOR_CLOCK_STYLE();

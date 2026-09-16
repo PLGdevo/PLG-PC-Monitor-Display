@@ -17,6 +17,7 @@ Chay:
     python monitor.py --port COM5      # ep dung cong nay, bo qua buoc do/xac thuc
     python monitor.py --interval 0.5   # doi khoang gui du lieu (giay)
     python monitor.py --list           # liet ke cac cong serial dang co
+    python monitor.py --ble            # gui qua Bluetooth LE (board ESP32-S3)
 
 Dinh dang du lieu gui xuong board, moi dong ket thuc bang '\n':
     CPU:<int>;RAM:<int>;GPU:<int>;GPUMEM:<int>;WIFI:<int>;TEMP:<int>;TIME:<HH:MM:SS>;DATE:<DD/MM/YYYY>;BAT:<int>
@@ -31,6 +32,7 @@ man hinh thiet bi. BAT la pin cua laptop, hien thi o icon pin ben trai.
 """
 
 import argparse
+import asyncio
 import re
 import sys
 import threading
@@ -290,6 +292,38 @@ def get_cpu_temp() -> int:
         if val is not None:
             return val
     return -1
+
+
+SETTINGS_PATH = __import__("pathlib").Path(
+    __import__("os").getenv("APPDATA") or __import__("pathlib").Path.home()
+) / "PLG_TFT_LCD_TASKMANAGER" / "monitor_settings.json"
+
+
+def load_settings() -> dict:
+    """Doc lai cau hinh ket noi (mode/port/baud/interval) tu lan chay truoc, luu o
+    %APPDATA%\\PLG_TFT_LCD_TASKMANAGER\\monitor_settings.json - de nguoi dung khong
+    phai chon lai Manual/cong/baud moi lan mo app. Tra dict rong neu chua co file
+    hoac file loi (khong lam sap app vi ly do phu nay)."""
+    import json
+
+    try:
+        with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def save_settings(settings: dict) -> None:
+    """Ghi lai cau hinh ket noi hien tai, bo qua loi (vd khong co quyen ghi) vi
+    day chi la tien ich nho, khong anh huong chuc nang chinh cua app."""
+    import json
+
+    try:
+        SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(SETTINGS_PATH, "w", encoding="utf-8") as f:
+            json.dump(settings, f)
+    except Exception:
+        pass
 
 
 PICO_VID_PID = {
@@ -588,31 +622,36 @@ class ConnectionWorker:
             self.on_status("🔴 Chua ket noi")
 
 
-# Bang mau "Industrial / Engineering Dashboard" theo dac ta chinh thuc: dark navy +
-# cyan, xanh la/do CHI dung cho trang thai (khong phu toan bo UI nhu ban gaming
-# truoc). Tach rieng thanh hang so o muc module (thay vi khai bao trong run_gui)
-# de de doi mau sau nay ma khong phai lan trong ham dung widget.
-BG = "#071426"          # Background
-PANEL_BG = "#0D2038"    # Card
-FIELD_BG = "#102943"    # Card phu (o nhap/combobox/canvas)
-BORDER = "#1B5685"      # Border
-TEXT = "#EAF6FF"        # Text chinh
-SUBTEXT = "#91ABC4"     # Text phu
-ACCENT = "#16C7F4"      # Primary (cyan) - vien, tieu de, nut chinh
-ACCENT_DIM = "#123650"
-ACCENT_ACTIVE = "#39E7FF"  # Secondary
-DANGER = "#FF4D67"      # Danger
-GOOD = "#45F28A"        # Success
-WARN_COLOR = "#FFC857"  # Warning
-CYAN = "#39E7FF"         # Secondary, dung cho du lieu/thong tin phu
-NET_BLUE = "#39E7FF"    # bieu do NET dung mau Secondary cho dong bo voi accent
-LOG_BG = "#0A1B30"
+# Bang mau "modern dashboard" dark mode: nen tim-than gan den (thay vi xam VSCode),
+# accent xanh-indigo sang lam diem nhan, cac sac do/vang/xanh la tuoi hon de tuong
+# phan ro rang tren nen toi. Tach rieng thanh hang so o muc module (thay vi khai
+# bao trong run_gui) de de doi mau sau nay ma khong phai lan trong ham dung widget.
+BG = "#0F1117"          # Background - tim-than gan den, sau va dju hon xam thuan
+PANEL_BG = "#171A24"    # Card - khung nhom (LabelFrame)
+FIELD_BG = "#1E212E"    # Tile phu - o nhap/combobox/canvas/card thong so
+BORDER = "#2A2E3D"      # Border - vien mong tach bach cac khoi
+TEXT = "#E7E9F3"        # Text chinh - trang nga, de doc tren nen toi
+SUBTEXT = "#8B90A8"     # Text phu - xam-tim nhat, dung cho nhan/label phu
+ACCENT = "#7C9CFF"      # Primary - xanh-indigo sang, mau nhan dien chinh
+ACCENT_DIM = "#242A4A"  # nen mo cua Accent (selection, nut o trang thai thuong)
+ACCENT_ACTIVE = "#A9BCFF"  # Accent sang hon khi hover/active
+DANGER = "#FF6B81"      # Danger - do-hong tuoi
+GOOD = "#3DDC97"        # Success - xanh la ngoc
+WARN_COLOR = "#FFC65C"  # Warning - vang cam
+CYAN = "#5FE3E0"        # Secondary - xanh ngoc, dung cho du lieu/thong tin phu
+NET_BLUE = "#7C9CFF"    # bieu do NET dung mau Primary cho dong bo voi accent
+LOG_BG = "#12141C"
+LOG_BG_ALT = "#171A24"  # nen xen ke (zebra stripe) cho hang chan trong bang Log
 LOG_COLORS = {
     "ok": GOOD,
     "error": DANGER,
     "warn": WARN_COLOR,
     "data": CYAN,
     "info": ACCENT,
+}
+METRIC_ICONS = {
+    "CPU": "🧠", "RAM": "💾", "GPU": "🎮", "VRAM": "🗄️",
+    "TEMP": "🌡️", "NET": "📶", "BAT": "🔋", "TIME": "🕒",
 }
 
 # Khi build bang PyInstaller (--onefile), cac file asset (.ico/.png) duoc giai nen
@@ -622,14 +661,20 @@ LOG_COLORS = {
 _ASSETS_DIR = __import__("pathlib").Path(getattr(sys, "_MEIPASS", None) or __file__).resolve()
 if _ASSETS_DIR.is_file():
     _ASSETS_DIR = _ASSETS_DIR.parent
-ICON_PATH = _ASSETS_DIR / "PLG_icon.ico"     # icon cua so (taskbar/title bar)
-LOGO_PATH = _ASSETS_DIR / "PLG_icon.png"     # dung lam logo o header - cung 1 icon PLG cho dong bo
+ICON_PATH = _ASSETS_DIR / "PLG_logoV2.ico"   # icon cua so (taskbar/title bar)
+# Logo header: uu tien ban da resize san bang Pillow/LANCZOS (PLG_logoV2_header.png,
+# ~96px ngang) - anh net, khong rang cua nhu khi Tk tu "subsample" (chi lay mau nearest-
+# neighbor, khong lam min) truc tiep tu file logo goc kich thuoc lon (1370x784).
+LOGO_HEADER_PATH = _ASSETS_DIR / "PLG_logoV2_header.png"
+LOGO_PATH = LOGO_HEADER_PATH if LOGO_HEADER_PATH.exists() else _ASSETS_DIR / "PLG_logoV2.png"
 
 
 def _apply_dark_neon_theme(root, ttk) -> None:
-    """Tuy bien ttk.Style thanh dark mode neon xanh duong. Dung theme 'clam' lam
-    nen vi day la theme duy nhat cho phep doi mau nen/vien cua tung widget (theme
-    mac dinh 'vista'/'winnative' tren Windows khoa cung mau he thong)."""
+    """Tuy bien ttk.Style thanh "modern dashboard" dark mode: bo goc mem hon ve
+    mat thi giac (padding rong, vien mong, khong con vien vuong cung nhu ban cu),
+    font Segoe UI Variable/Semibold cho tieu de. Dung theme 'clam' lam nen vi day
+    la theme duy nhat cho phep doi mau nen/vien cua tung widget (theme mac dinh
+    'vista'/'winnative' tren Windows khoa cung mau he thong)."""
     root.configure(bg=BG)
     style = ttk.Style(root)
     style.theme_use("clam")
@@ -638,35 +683,39 @@ def _apply_dark_neon_theme(root, ttk) -> None:
                      bordercolor=BORDER, darkcolor=BG, lightcolor=BG, font=("Segoe UI", 9))
     style.configure("TFrame", background=BG)
     style.configure("TLabel", background=BG, foreground=TEXT)
-    style.configure("Sub.TLabel", background=BG, foreground=SUBTEXT)
-    style.configure("Title.TLabel", background=BG, foreground=ACCENT, font=("Segoe UI", 15, "bold"))
-    style.configure("Status.TLabel", background=BG, foreground=ACCENT, font=("Segoe UI", 9, "bold"))
+    style.configure("Sub.TLabel", background=BG, foreground=SUBTEXT, font=("Segoe UI", 9))
+    style.configure("Title.TLabel", background=BG, foreground=TEXT, font=("Segoe UI Semibold", 17))
+    style.configure("Status.TLabel", background=BG, foreground=TEXT, font=("Segoe UI", 9, "bold"))
+    style.configure("SectionTitle.TLabel", background=BG, foreground=SUBTEXT, font=("Segoe UI", 8, "bold"))
 
-    style.configure("TLabelframe", background=PANEL_BG, bordercolor=ACCENT_DIM, relief="solid", borderwidth=1)
-    style.configure("TLabelframe.Label", background=PANEL_BG, foreground=ACCENT, font=("Segoe UI", 9, "bold"))
+    style.configure("TLabelframe", background=PANEL_BG, bordercolor=BORDER, relief="solid", borderwidth=1)
+    style.configure("TLabelframe.Label", background=PANEL_BG, foreground=ACCENT, font=("Segoe UI Semibold", 9))
     style.configure("Card.TFrame", background=PANEL_BG)
     style.configure("Card.TLabel", background=PANEL_BG, foreground=TEXT)
     style.configure("CardName.TLabel", background=PANEL_BG, foreground=SUBTEXT, font=("Segoe UI", 8, "bold"))
     style.configure("CardValue.TLabel", background=PANEL_BG, foreground=ACCENT, font=("Consolas", 12, "bold"))
-    # Tile: nen sang hon 1 chut so voi Card, dung cho tung o metric rieng le co vien
-    # tach bach ro rang - cho cam giac "dashboard" chuyen nghiep hon la mang chu phang.
+    # Tile: nen sang hon 1 chut so voi Card, dung cho tung o metric rieng le - cho
+    # cam giac "dashboard" chuyen nghiep hon la mang chu phang.
     style.configure("Tile.TFrame", background=FIELD_BG)
     style.configure("TileName.TLabel", background=FIELD_BG, foreground=SUBTEXT, font=("Segoe UI", 8, "bold"))
-    style.configure("TileValue.TLabel", background=FIELD_BG, foreground=ACCENT, font=("Consolas", 13, "bold"))
+    style.configure("TileValue.TLabel", background=FIELD_BG, foreground=TEXT, font=("Consolas", 14, "bold"))
 
-    style.configure("TButton", background=FIELD_BG, foreground=TEXT, bordercolor=ACCENT_DIM,
-                     focusthickness=0, padding=(14, 6))
+    style.configure("TButton", background=FIELD_BG, foreground=TEXT, bordercolor=BORDER,
+                     focusthickness=0, relief="flat", padding=(16, 8))
     style.map("TButton", background=[("active", ACCENT_DIM), ("disabled", PANEL_BG)],
               foreground=[("disabled", SUBTEXT)])
-    style.configure("Accent.TButton", background=ACCENT_DIM, foreground=ACCENT, bordercolor=ACCENT, padding=(14, 6))
-    style.map("Accent.TButton", background=[("active", ACCENT), ("disabled", PANEL_BG)],
-              foreground=[("active", BG), ("disabled", SUBTEXT)])
-    style.configure("Danger.TButton", background=PANEL_BG, foreground=DANGER, bordercolor=DANGER, padding=(14, 6))
+    style.configure("Accent.TButton", background=ACCENT, foreground="#0B0C12", bordercolor=ACCENT,
+                     relief="flat", padding=(16, 8), font=("Segoe UI Semibold", 9))
+    style.map("Accent.TButton", background=[("active", ACCENT_ACTIVE), ("disabled", PANEL_BG)],
+              foreground=[("disabled", SUBTEXT)])
+    style.configure("Danger.TButton", background=PANEL_BG, foreground=DANGER, bordercolor=DANGER,
+                     relief="flat", padding=(16, 8), font=("Segoe UI Semibold", 9))
     style.map("Danger.TButton", background=[("active", DANGER), ("disabled", PANEL_BG)],
-              foreground=[("active", BG), ("disabled", SUBTEXT)])
+              foreground=[("active", "#0B0C12"), ("disabled", SUBTEXT)])
 
     style.configure("TCombobox", fieldbackground=FIELD_BG, background=FIELD_BG, foreground=TEXT,
-                     arrowcolor=ACCENT, bordercolor=ACCENT_DIM, selectbackground=FIELD_BG, selectforeground=TEXT)
+                     arrowcolor=ACCENT, bordercolor=BORDER, selectbackground=FIELD_BG, selectforeground=TEXT,
+                     padding=(8, 4))
     style.map("TCombobox", fieldbackground=[("readonly", FIELD_BG), ("disabled", PANEL_BG)],
               foreground=[("disabled", SUBTEXT)])
     root.option_add("*TCombobox*Listbox.background", FIELD_BG)
@@ -674,7 +723,8 @@ def _apply_dark_neon_theme(root, ttk) -> None:
     root.option_add("*TCombobox*Listbox.selectBackground", ACCENT_DIM)
     root.option_add("*TCombobox*Listbox.selectForeground", ACCENT)
 
-    style.configure("TEntry", fieldbackground=FIELD_BG, foreground=TEXT, bordercolor=ACCENT_DIM, insertcolor=ACCENT)
+    style.configure("TEntry", fieldbackground=FIELD_BG, foreground=TEXT, bordercolor=BORDER,
+                     insertcolor=ACCENT, padding=(8, 4))
     style.map("TEntry", fieldbackground=[("disabled", PANEL_BG)])
 
     style.configure("Vertical.TScrollbar", background=FIELD_BG, troughcolor=BG, bordercolor=BG,
@@ -695,8 +745,8 @@ def run_gui() -> int:
 
     root = tk.Tk()
     root.title("PLG PC Task Monitor")
-    root.geometry("680x600")
-    root.minsize(600, 500)
+    root.geometry("720x660")
+    root.minsize(640, 540)
     _apply_dark_neon_theme(root, ttk)
 
     if ICON_PATH.exists():
@@ -705,34 +755,42 @@ def run_gui() -> int:
         except Exception:
             pass
 
+    # Thanh accent mong o mep tren cung, dac trung cho phong cach "modern dashboard"
+    # (tuong tu title bar co gradient/accent cua nhieu app hien dai).
+    tk.Frame(root, bg=ACCENT, height=3).pack(fill="x", side="top")
+
     header = ttk.Frame(root)
-    header.pack(fill="x", padx=14, pady=(14, 10))
+    header.pack(fill="x", padx=18, pady=(16, 0))
     logo_img = None
     if LOGO_PATH.exists():
         try:
             logo_img = tk.PhotoImage(file=str(LOGO_PATH))
-            factor = max(1, logo_img.width() // 44)
-            logo_img = logo_img.subsample(factor, factor)
-            logo_tile = tk.Frame(header, bg=PANEL_BG, highlightbackground=BORDER, highlightthickness=1)
-            logo_tile.pack(side="left", padx=(0, 12))
-            tk.Label(logo_tile, image=logo_img, bg=PANEL_BG).pack(padx=6, pady=6)
+            # Chi "subsample" (giam mau nearest-neighbor cua Tk, de bi rang/mo) khi
+            # dang phai dung anh logo GOC kich thuoc lon (khong tim thay ban da
+            # resize san PLG_logoV2_header.png). Ban header da duoc resize truoc
+            # bang Pillow/LANCZOS nen giu nguyen, hien thi net hon nhieu.
+            if LOGO_PATH != LOGO_HEADER_PATH and logo_img.width() > 48:
+                factor = max(1, logo_img.width() // 48)
+                logo_img = logo_img.subsample(factor, factor)
+            logo_tile = tk.Frame(header, bg=FIELD_BG, highlightbackground=BORDER, highlightthickness=1)
+            logo_tile.pack(side="left", padx=(0, 14))
+            tk.Label(logo_tile, image=logo_img, bg=FIELD_BG).pack(padx=8, pady=8)
         except Exception:
             logo_img = None
     title_box = ttk.Frame(header)
     title_box.pack(side="left")
-    ttk.Label(title_box, text="PLG PC TASK MONITOR", style="Title.TLabel").pack(anchor="w")
-    ttk.Label(title_box, text="Serial link toi board PLG_TFT_LCD_TASKMANAGER", style="Sub.TLabel").pack(anchor="w")
+    ttk.Label(title_box, text="PLG PC Task Monitor", style="Title.TLabel").pack(anchor="w")
+    ttk.Label(title_box, text="Serial link toi board PLG_TFT_LCD_TASKMANAGER", style="Sub.TLabel").pack(anchor="w", pady=(2, 0))
     root._logo_img_ref = logo_img  # giu tham chieu, tranh bi garbage-collect mat anh
 
-    ttk.Separator(root, orient="horizontal").pack(fill="x", padx=14)
-
     conn_frame = ttk.LabelFrame(root, text="  KET NOI  ")
-    conn_frame.pack(fill="x", padx=14, pady=8)
+    conn_frame.pack(fill="x", padx=18, pady=(16, 8))
 
-    mode_var = tk.StringVar(value="auto")  # mac dinh: Auto (dung hanh vi hien tai)
-    baud_var = tk.StringVar(value="115200")
-    interval_var = tk.StringVar(value="0.8")
-    port_var = tk.StringVar(value="")
+    saved_settings = load_settings()
+    mode_var = tk.StringVar(value=saved_settings.get("mode", "auto"))
+    baud_var = tk.StringVar(value=str(saved_settings.get("baud", "115200")))
+    interval_var = tk.StringVar(value=str(saved_settings.get("interval", "0.8")))
+    port_var = tk.StringVar(value=saved_settings.get("port", ""))
     status_var = tk.StringVar(value="🔴 Chua ket noi")
 
     ttk.Label(conn_frame, text="Che do:").grid(row=0, column=0, sticky="w", padx=6, pady=4)
@@ -773,23 +831,23 @@ def run_gui() -> int:
     on_mode_change()
 
     btn_frame = ttk.Frame(root)
-    btn_frame.pack(fill="x", padx=14, pady=(2, 8))
-    connect_btn = ttk.Button(btn_frame, text="▸ CONNECT", style="Accent.TButton")
-    disconnect_btn = ttk.Button(btn_frame, text="■ DISCONNECT", style="Danger.TButton", state="disabled")
-    connect_btn.pack(side="left", padx=(0, 8))
+    btn_frame.pack(fill="x", padx=18, pady=(2, 8))
+    connect_btn = ttk.Button(btn_frame, text="▸  CONNECT", style="Accent.TButton")
+    disconnect_btn = ttk.Button(btn_frame, text="■  DISCONNECT", style="Danger.TButton", state="disabled")
+    connect_btn.pack(side="left", padx=(0, 10))
     disconnect_btn.pack(side="left")
-    status_dot = tk.Canvas(btn_frame, width=10, height=10, bg=BG, highlightthickness=0)
-    status_dot.pack(side="left", padx=(16, 6))
-    status_dot_id = status_dot.create_oval(1, 1, 9, 9, fill=DANGER, outline="")
+    status_dot = tk.Canvas(btn_frame, width=12, height=12, bg=BG, highlightthickness=0)
+    status_dot.pack(side="left", padx=(18, 8))
+    status_dot_id = status_dot.create_oval(1, 1, 11, 11, fill=DANGER, outline="")
     ttk.Label(btn_frame, textvariable=status_var, style="Status.TLabel").pack(side="left")
 
     # Bang hien thi 8 Card thong so, luoi 4 cot x 2 hang dung theo dac ta: CPU/RAM/GPU/
     # VRAM o hang tren, TEMP/NET/BAT/TIME o hang duoi. Moi card la 1 "Card phu"
     # (FIELD_BG) co vien mong (BORDER) tren nen Card (PANEL_BG) cua ca khung.
     metrics_frame = ttk.LabelFrame(root, text="  THONG SO DANG GUI  ")
-    metrics_frame.pack(fill="x", padx=14, pady=8)
+    metrics_frame.pack(fill="x", padx=18, pady=8)
     metrics_inner = ttk.Frame(metrics_frame, style="Card.TFrame")
-    metrics_inner.pack(fill="x", padx=10, pady=10)
+    metrics_inner.pack(fill="x", padx=12, pady=12)
 
     SPARK_KEYS = ("cpu", "gpu_mem")
     HIST_LEN = 40
@@ -805,18 +863,22 @@ def run_gui() -> int:
         tile = tk.Frame(metrics_inner, bg=FIELD_BG, highlightbackground=BORDER, highlightthickness=1)
         tile.grid(row=i // 4, column=i % 4, sticky="nsew", padx=6, pady=6)
         cell = ttk.Frame(tile, style="Tile.TFrame")
-        cell.pack(fill="both", expand=True, padx=12, pady=10)
-        ttk.Label(cell, text=label, style="TileName.TLabel").pack(anchor="w")
+        cell.pack(fill="both", expand=True, padx=14, pady=12)
+        name_row = ttk.Frame(cell, style="Tile.TFrame")
+        name_row.pack(fill="x", anchor="w")
+        ttk.Label(name_row, text=METRIC_ICONS.get(label, ""), background=FIELD_BG,
+                  font=("Segoe UI Emoji", 10)).pack(side="left", padx=(0, 5))
+        ttk.Label(name_row, text=label, style="TileName.TLabel").pack(side="left")
         if kind == "text":
             ttk.Label(cell, textvariable=metric_vars["TIME"], style="TileValue.TLabel",
-                      font=("Consolas", 16, "bold")).pack(anchor="w", pady=(6, 0))
+                      font=("Consolas", 17, "bold")).pack(anchor="w", pady=(8, 0))
         else:
             var = tk.StringVar(value="--")
             metric_vars[label] = var
-            ttk.Label(cell, textvariable=var, style="TileValue.TLabel").pack(anchor="w")
+            ttk.Label(cell, textvariable=var, style="TileValue.TLabel").pack(anchor="w", pady=(6, 0))
             canvas_h = {"spark": 28, "bar": 12, "gauge": 30, "netbars": 24, "battery": 22}[kind]
             canvas = tk.Canvas(cell, height=canvas_h, bg=FIELD_BG, highlightthickness=0)
-            canvas.pack(fill="x", pady=(6, 0))
+            canvas.pack(fill="x", pady=(8, 0))
             metric_canvases[label] = canvas
     for col in range(4):
         metrics_inner.columnconfigure(col, weight=1)
@@ -930,8 +992,10 @@ def run_gui() -> int:
     # Log dang bang 3 cot (Time / Status / Message), giong may giam sat chuyen dung
     # hon la 1 khoi text tho - de loc/doc theo tung loai su kien bang mat.
     log_frame = ttk.LabelFrame(root, text="  LOG  ")
-    log_frame.pack(fill="both", expand=True, padx=14, pady=(0, 14))
-    log_tree = ttk.Treeview(log_frame, columns=("time", "status", "message"), show="headings", height=10)
+    log_frame.pack(fill="both", expand=True, padx=18, pady=(0, 16))
+    log_inner = ttk.Frame(log_frame, style="Card.TFrame")
+    log_inner.pack(fill="both", expand=True, padx=4, pady=4)
+    log_tree = ttk.Treeview(log_inner, columns=("time", "status", "message"), show="headings", height=10)
     log_tree.heading("time", text="Time")
     log_tree.heading("status", text="Status")
     log_tree.heading("message", text="Message")
@@ -939,23 +1003,31 @@ def run_gui() -> int:
     log_tree.column("status", width=90, anchor="w", stretch=False)
     log_tree.column("message", width=420, anchor="w", stretch=True)
     log_tree.pack(fill="both", expand=True, side="left")
-    log_scroll = ttk.Scrollbar(log_frame, command=log_tree.yview)
+    log_scroll = ttk.Scrollbar(log_inner, command=log_tree.yview)
     log_scroll.pack(fill="y", side="right")
     log_tree.configure(yscrollcommand=log_scroll.set)
 
     style = ttk.Style(root)
     style.configure("Treeview", background=LOG_BG, fieldbackground=LOG_BG, foreground=TEXT,
-                     rowheight=22, borderwidth=0, font=("Consolas", 9))
+                     rowheight=24, borderwidth=0, font=("Consolas", 9))
     style.configure("Treeview.Heading", background=PANEL_BG, foreground=ACCENT,
-                     font=("Segoe UI", 9, "bold"), relief="flat")
+                     font=("Segoe UI Semibold", 9), relief="flat", padding=(6, 6))
     style.map("Treeview", background=[("selected", ACCENT_DIM)], foreground=[("selected", ACCENT)])
+    log_tree.tag_configure("even", background=LOG_BG)
+    log_tree.tag_configure("odd", background=LOG_BG_ALT)
     for tag, color in LOG_COLORS.items():
         log_tree.tag_configure(tag, foreground=color)
 
     MAX_LOG_ROWS = 500  # gioi han so dong log, tranh Treeview phinh to sau nhieu gio chay
+    _log_row_count = {"n": 0}
 
     def append_log(status: str, message: str, tag: str = "info") -> None:
-        log_tree.insert("", "end", values=(time.strftime("%H:%M:%S"), status, message), tags=(tag,))
+        # Tag mau theo loai su kien (ok/error/warn/...) chi anh huong mau CHU; tag
+        # zebra (even/odd) o dong sau quyet dinh mau NEN xen ke - Treeview cho phep
+        # ap nhieu tag cung luc, tag dung sau trong tuple ghi de thuoc tinh trung.
+        zebra = "even" if _log_row_count["n"] % 2 == 0 else "odd"
+        _log_row_count["n"] += 1
+        log_tree.insert("", "end", values=(time.strftime("%H:%M:%S"), status, message), tags=(tag, zebra))
         children = log_tree.get_children()
         if len(children) > MAX_LOG_ROWS:
             log_tree.delete(children[0])
@@ -1011,6 +1083,7 @@ def run_gui() -> int:
         if mode == "manual" and not port:
             append_log("ERROR", "Vui long chon cong o che do Manual.", "error")
             return
+        save_settings({"mode": mode, "port": port or "", "baud": baud, "interval": interval})
         worker = ConnectionWorker(mode, port, baud, interval, on_log, on_metrics, on_status)
         worker.start()
         connect_btn.configure(state="disabled")
@@ -1054,17 +1127,130 @@ def run_gui() -> int:
     return 0
 
 
+# ---------------------------------------------------------------------------
+# Che do BLE (board ESP32-S3)
+# ---------------------------------------------------------------------------
+# Board ESP32 phat mot Nordic UART Service (NUS) - "cong COM ao tren BLE". Ta ghi
+# du lieu vao characteristic RX cua no va nhan tra loi qua notify tren TX, dung
+# het cac ham gather_metrics/build_payload san co: giao thuc du lieu khong doi,
+# chi doi duong truyen.
+BLE_DEVICE_NAME = "PLG_TFT_LCD"
+NUS_RX_CHAR_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"  # PC ghi vao day
+NUS_TX_CHAR_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"  # board notify ve day
+
+# Kich thuoc goi ghi an toan khi khong biet MTU da thoa thuan duoc bao nhieu: MTU
+# BLE toi thieu la 23 byte, tru 3 byte header ATT con 20. Payload cua ta (~90 ky
+# tu) luon dai hon nen phai cat nho; firmware gom lai theo ky tu '\n' nen viec cat
+# o dau cung khong anh huong.
+BLE_MIN_CHUNK = 20
+
+
+async def _ble_send_line(client, text: str) -> None:
+    """Ghi 1 dong xuong board, tu cat nho theo MTU thuc te neu biet."""
+    chunk_size = BLE_MIN_CHUNK
+    mtu = getattr(client, "mtu_size", None)
+    if isinstance(mtu, int) and mtu > 23:
+        chunk_size = mtu - 3
+
+    data = text.encode("ascii")
+    for i in range(0, len(data), chunk_size):
+        # response=False (write without response): nhanh hon nhieu cho luong du lieu
+        # dinh ky, khong can cho board xac nhan tung goi.
+        await client.write_gatt_char(NUS_RX_CHAR_UUID, data[i:i + chunk_size], response=False)
+
+
+async def _ble_session(interval: float) -> None:
+    """Do tim board, ket noi, xac thuc rui gui du lieu den khi mat ket noi."""
+    from bleak import BleakClient, BleakScanner
+
+    print(_c(f"Dang do tim thiet bi BLE \"{BLE_DEVICE_NAME}\"...", Fore.YELLOW))
+    device = await BleakScanner.find_device_by_name(BLE_DEVICE_NAME, timeout=15.0)
+    if device is None:
+        print(_c(f"Khong thay \"{BLE_DEVICE_NAME}\". Kiem tra board da chon SETTING > CONNECTION > "
+                 f"BLUETOOTH chua, thu lai sau {RETRY_DELAY}s", Fore.YELLOW))
+        await asyncio.sleep(RETRY_DELAY)
+        return
+
+    async with BleakClient(device) as client:
+        # Bat tay xac thuc giong het che do USB: gui PLG_ID?, cho dung cau tra loi.
+        # Khac USB o cho da loc theo ten thiet bi BLE nen kha nang nham thiet bi rat
+        # thap - van kiem tra de bao loi som neu firmware tren board da cu/khac.
+        reply_seen = asyncio.Event()
+        buf = ""
+
+        def on_notify(_sender, data: bytearray) -> None:
+            nonlocal buf
+            buf += data.decode("ascii", errors="ignore")
+            if IDENTITY_REPLY in buf:
+                reply_seen.set()
+
+        await client.start_notify(NUS_TX_CHAR_UUID, on_notify)
+        await _ble_send_line(client, IDENTITY_CMD.decode("ascii"))
+        try:
+            await asyncio.wait_for(reply_seen.wait(), timeout=5.0)
+        except asyncio.TimeoutError:
+            print(_c(f"Thiet bi BLE khong tra loi xac thuc \"{IDENTITY_REPLY}\", "
+                     f"co the dang chay firmware khac. Ngat ket noi.", Fore.RED))
+            return
+
+        print(_c(f"Da xac thuc board PLG qua BLE ({device.address}), gui du lieu moi {interval}s. "
+                 f"Ctrl+C de dung.", Fore.GREEN))
+        while client.is_connected:
+            m = gather_metrics()
+            await _ble_send_line(client, build_payload(m))
+            print(format_console_line(m))
+            await asyncio.sleep(interval)
+
+        print(_c("Mat ket noi BLE, thu ket noi lai...", Fore.RED))
+
+
+async def _ble_main_loop(interval: float) -> None:
+    """Vong ngoai: tu do tim/ket noi lai khi chua thay board hoac bi ngat giua chung,
+    giong tinh than vong lap cua che do USB."""
+    while True:
+        try:
+            await _ble_session(interval)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # loi BLE rat da dang theo OS/adapter, khong the liet ke het
+            print(_c(f"Loi BLE: {exc}, thu lai sau {RETRY_DELAY}s", Fore.RED))
+            await asyncio.sleep(RETRY_DELAY)
+
+
+def run_ble(interval: float) -> int:
+    try:
+        import bleak  # noqa: F401  chi de bao loi som, ro rang neu chua cai
+    except ImportError:
+        print(_c("Che do --ble can goi 'bleak': chay 'pip install bleak' (hoac "
+                 "'pip install -r requirements.txt') rui thu lai.", Fore.RED))
+        return 1
+
+    psutil.cpu_percent(interval=None)  # lan goi dau tra ve 0.0, bo qua de lay mau chuan
+    time.sleep(0.2)
+    try:
+        asyncio.run(_ble_main_loop(interval))
+    except KeyboardInterrupt:
+        print("\nDa dung.")
+    return 0
+
+
 def console_main() -> int:
-    parser = argparse.ArgumentParser(description="Gui thong so CPU/RAM/GPU/WIFI xuong board PLG qua Serial")
+    parser = argparse.ArgumentParser(description="Gui thong so CPU/RAM/GPU/WIFI xuong board PLG qua Serial hoac BLE")
     parser.add_argument("--port", help="Ep dung cong serial nay (vd COM5, /dev/ttyACM0), bo qua buoc tu do tim + xac thuc.")
     parser.add_argument("--baud", type=int, default=115200, help="Toc do baud (mac dinh 115200)")
     parser.add_argument("--interval", type=float, default=0.8, help="Khoang thoi gian gui du lieu, giay (mac dinh 0.8)")
     parser.add_argument("--list", action="store_true", help="Liet ke cac cong serial va thoat")
     parser.add_argument("--gui", action="store_true", help="Mo giao dien GUI (chon che do/cong/baud, nut Connect/Disconnect)")
+    parser.add_argument("--ble", action="store_true",
+                        help=f"Gui qua Bluetooth LE thay vi USB (board ESP32-S3 da chon SETTING > "
+                             f"CONNECTION > BLUETOOTH, quang ba ten \"{BLE_DEVICE_NAME}\")")
     args = parser.parse_args()
 
     if args.gui:
         return run_gui()
+
+    if args.ble:
+        return run_ble(args.interval)
 
     if args.list:
         ports = list(serial.tools.list_ports.comports())

@@ -4,8 +4,8 @@ Bản port firmware sang ESP32-S3 (PlatformIO + Arduino core). Kế hoạch đ�
 sprint nằm ở [README_ESP32_MIGRATION.md](../README_ESP32_MIGRATION.md); bản Pico gốc vẫn ở
 thư mục cha và không bị đụng tới.
 
-**Trạng thái: Sprint 2 (lớp Transport + màn hình chọn kết nối) — code đã viết, build sạch
-(0 lỗi/0 warning), chưa nghiệm thu trên phần cứng thật.**
+**Trạng thái: Sprint 3 (Bluetooth LE) — code đã viết, build sạch (0 lỗi/0 warning), chưa
+nghiệm thu trên phần cứng thật.**
 
 ## Quyết định kiến trúc: giữ nguyên thư viện màn hình
 
@@ -46,12 +46,23 @@ Sprint 0. Cắm PC chạy `pc_monitor/monitor.py` (bản hiện tại, không c�
 | Icon góc phải trên | Bánh răng hiện khi ở SETTING; icon sóng/gạch chéo phản ánh `CONNECT_STATUS` |
 | SETTING → CONNECTION (mục cuối menu) | Danh sách USB (COM) / BLUETOOTH / WIFI, xoay để duyệt |
 | Chọn USB, nhấn ngắn | Quay lại menu; icon kết nối vẫn phản ánh dữ liệu Serial thật (như trước) |
-| Chọn BLUETOOTH hoặc WIFI, nhấn ngắn | Quay lại menu; icon kết nối chuyển sang "mất kết nối" (X) — đúng vì 2 giao thức này còn là **stub** (Sprint 3-5), Serial log in "chua trien khai" 1 lần |
-| Đổi sang BLUETOOTH/WIFI rồi rút nguồn, cắm lại | Mở lại đúng mode đã chọn (đọc từ NVS namespace `plg_net`, độc lập với `plg_ui` của màu/font/ngôn ngữ) |
-| Đổi lại về USB sau khi thử BLE/WiFi | Serial nhận dữ liệu lại bình thường, icon trở lại "đã kết nối" trong ~3s |
+| Chọn WIFI, nhấn ngắn | Quay lại menu; icon "mất kết nối" — đúng vì WiFi còn là **stub** (Sprint 4-5), Serial log in "chua trien khai" 1 lần |
+| Đổi mode rồi rút nguồn, cắm lại | Mở lại đúng mode đã chọn (NVS namespace `plg_net`, độc lập với `plg_ui` của màu/font/ngôn ngữ) |
+| Đổi lại về USB sau khi thử mode khác | Serial nhận dữ liệu lại bình thường, icon trở lại "đã kết nối" trong ~3s |
 
-Đây là Sprint 2 — chỉ **chọn được** giao thức, BLE/WiFi chưa truyền dữ liệu thật; mục đó thuộc
-Sprint 3 (BLE) và Sprint 4-5 (WiFi) trong `README_ESP32_MIGRATION.md`.
+### Bluetooth (Sprint 3)
+
+| Thao tác | Kỳ vọng |
+|---|---|
+| Chọn BLUETOOTH, nhấn ngắn | Vào thẳng màn hình trạng thái BLE: tên `PLG_TFT_LCD` cỡ lớn + "Dang cho ket noi..." |
+| Trên PC: `python monitor.py --ble` | Dò thấy thiết bị, bắt tay `PLG_ID?` thành công, bắt đầu gửi |
+| Sau khi PC kết nối | Màn hình đổi sang "Da ket noi" (màu xanh), icon sóng góc phải bật |
+| Giữ 2s → về HOME | Chart CPU/RAM/GPU/GPUMEM/WIFI/TEMP + đồng hồ cập nhật **giống hệt** như qua USB |
+| Ctrl+C trên PC / tắt Bluetooth PC | Icon kết nối chuyển "mất kết nối"; board tự quảng bá lại, chạy `--ble` lần nữa là kết nối lại được |
+| Nhấn ngắn ở màn hình trạng thái BLE | Quay lại menu SETTING (BLE vẫn chạy nền) |
+| Xoay encoder ở màn hình trạng thái BLE | Không có gì thay đổi (không âm thầm đổi mục menu bên dưới) |
+
+WiFi chưa truyền dữ liệu thật — thuộc Sprint 4-5 trong `README_ESP32_MIGRATION.md`.
 
 ## Cấu trúc
 
@@ -66,11 +77,12 @@ esp32/
     ├── PLG_display.cpp       # khởi tạo SPI/TFT + ui_drawText (port sang Arduino API)
     ├── PLG_input.cpp         # encoder qua attachInterrupt + dispatch UI (port + tách tầng, xem dưới)
     ├── PLG_flash_settings.cpp# NVS (Preferences) thay cho raw flash sector — mau/font/ngôn ngữ
+    ├── PLG_protocol.cpp      # parse "CPU:..;RAM:..\n" + bắt tay PLG_ID? — dùng chung cho cả 3 đường truyền
     ├── PLG_transport.cpp     # dispatcher chọn USB/BLE/WiFi, riêng NVS namespace "plg_net" (mode)
-    ├── PLG_transport_ble.cpp # stub Sprint 2 — hiện thực thật ở Sprint 3
-    ├── PLG_transport_wifi.cpp# stub Sprint 2 — hiện thực thật ở Sprint 4-5
-    ├── PLG_serial_link.cpp   # Serial.available()/read() thay getchar_timeout_us + theo dõi "còn nhận được dữ liệu không"
-    ├── PLG_screens.cpp       # port gần như nguyên văn (1100 dòng) + MONITOR_CONNECTION mới
+    ├── PLG_transport_ble.cpp # BLE thật (NimBLE, Nordic UART Service) — Sprint 3
+    ├── PLG_transport_wifi.cpp# stub — hiện thực thật ở Sprint 4-5
+    ├── PLG_serial_link.cpp   # chỉ còn đọc byte từ Serial rồi đưa vào PLG_protocol
+    ├── PLG_screens.cpp       # port gần như nguyên văn (1100 dòng) + MONITOR_CONNECTION/MONITOR_BLE_STATUS
     ├── PLG_charts.cpp        # copy nguyên văn (không đụng phần cứng)
     └── PLG_state/theme/lang.cpp  # copy nguyên văn + field mới cho SETTING > CONNECTION
 ```
@@ -97,7 +109,12 @@ esp32/
   và `plg_net` (giao thức kết nối, trong `PLG_transport.cpp`) — độc lập vì khác bản chất cấu hình,
   và Sprint 5 sẽ cần thêm SSID/mật khẩu/IP tĩnh vào đúng namespace `plg_net` này.
 
+- **Callback BLE không được ghi thẳng vào state UI**: callback của NimBLE chạy trong task riêng,
+  không phải `loop()`. Ghi thẳng vào `chart_cpu[]`/`current_time_str` từ đó sẽ tranh chấp với
+  `loop()` đang đọc chính các biến ấy để vẽ. Nên callback chỉ đẩy byte thô vào một FreeRTOS
+  StreamBuffer, còn `transport_ble_poll()` (chạy trong `loop()`) mới parse.
+
 ## Tiếp theo
 
-Sprint 3 — hiện thực BLE thật (`NimBLE-Arduino` GATT server) trong `PLG_transport_ble.cpp`,
-màn hình `MONITOR_BLE_STATUS` hiện tên thiết bị + trạng thái chờ/đã kết nối.
+Sprint 4 — WiFi: quét SSID, nhập mật khẩu bằng encoder (wheel-picker), kết nối DHCP và mở TCP
+server nhận dữ liệu.

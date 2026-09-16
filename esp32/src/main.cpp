@@ -65,6 +65,8 @@ void loop()
             MONITOR_LANGUAGE();
         else if (show_clock_style)
             MONITOR_CLOCK_STYLE();
+        else if (show_ble_status)
+            MONITOR_BLE_STATUS();
         else if (show_connection)
             MONITOR_CONNECTION();
         else

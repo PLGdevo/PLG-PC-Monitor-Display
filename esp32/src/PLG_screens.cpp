@@ -12,6 +12,7 @@
 #include "PLG_lang.h"
 #include "PLG_logo.hpp"
 #include "PLG_transport.h"
+#include "PLG_transport_ble.h"
 
 void drawLogoFull(int16_t x, int16_t y, int16_t w, int16_t h, const uint16_t *img)
 {
@@ -1101,6 +1102,51 @@ void MONITOR_CONNECTION()
         draw_connection_row(last_connection_index, false);
         draw_connection_row(connection_index, true);
         last_connection_index = connection_index;
+    }
+}
+
+/*------------------- Man hinh trang thai BLE -------------------*/
+// ve 1 dong chu can giua man hinh; dung chung cho tieu de/ten thiet bi/trang thai
+static void draw_centered_line(int16_t y, const char *text, uint16_t color, uint8_t size, int16_t clearH)
+{
+    int16_t textW = (int16_t)strlen(text) * size * (5 + 1);
+    int16_t x = (320 - textW) / 2;
+    if (x < 0)
+        x = 0;
+    myTFT.TFTfillRect(0, y - 3, 320, clearH, UI_BG);
+    myTFT.TFTdrawText(x, y, (char *)text, color, UI_BG, size);
+}
+
+// cache trang thai da ve, tranh ve lai moi vong loop() (se nhap nhay).
+// -1 = chua ve lan nao; 0 = dang cho; 1 = da ket noi.
+static int8_t last_ble_conn_drawn = -1;
+
+void MONITOR_BLE_STATUS()
+{
+    MONITOR_STATUS();
+
+    if (last_show_ble_status != show_ble_status)
+    {
+        last_show_ble_status = show_ble_status;
+        myTFT.TFTfillRect(0, 24, 320, 216, UI_BG);
+        last_ble_conn_drawn = -1;
+    }
+
+    if (last_ble_conn_drawn < 0)
+    {
+        // Phan tinh: chi ve 1 lan khi vua vao man hinh
+        draw_centered_line(50, lang_ble_title(), UI_TEXT_DIM, 1, 16);
+        draw_centered_line(80, BLE_DEVICE_NAME, UI_ACCENT, 3, 30);
+        draw_centered_line(190, lang_hint_back(), UI_TEXT_DIM, 1, 16);
+    }
+
+    // Phan dong: chi ve lai khi trang thai ket noi that su doi
+    int8_t now_conn = transport_ble_is_connected() ? 1 : 0;
+    if (now_conn != last_ble_conn_drawn)
+    {
+        const char *text = now_conn ? lang_status_connected() : lang_status_waiting();
+        draw_centered_line(140, text, now_conn ? UI_CPU : UI_TEXT_DIM, 2, 22);
+        last_ble_conn_drawn = now_conn;
     }
 }
 

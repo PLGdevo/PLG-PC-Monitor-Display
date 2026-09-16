@@ -115,6 +115,9 @@ static void key_value_tang()
             clock_style_index++;
         else if (show_connection)
             connection_index++;
+        else if (show_ble_status)
+            ; // man hinh chi hien trang thai, khong co gi de chinh - nuot nac quay de khong am
+              // tham doi muc menu SETTING dang nam duoi
         else
             funtion_mode++;
         break;
@@ -142,6 +145,8 @@ static void key_value_giam()
             clock_style_index--;
         else if (show_connection)
             connection_index--;
+        else if (show_ble_status)
+            ; // xem giai thich o key_value_tang()
         else
             funtion_mode--;
         break;
@@ -295,14 +300,32 @@ static void handle_button_event(ButtonEvent event)
         clock_style_index = active_clock_style; // bat dau duyet tu kieu dang dung
         show_clock_style = true;
     }
+    else if (desktop_state == DESKTOP_SETING && show_ble_status)
+    {
+        Serial.println("PLG_>>>> exit BLE STATUS, back to SETTING menu");
+        show_ble_status = false;
+        last_show_ble_status = false; // dong bo lai co, de lan sau vao lai duoc xoa man hinh dung cach
+        menu_needs_full_draw = true;
+    }
     else if (desktop_state == DESKTOP_SETING && show_connection)
     {
-        Serial.printf("PLG_>>>> apply CONNECTION #%d (%s), back to SETTING menu\n", connection_index, TRANSPORT_MODE_NAMES[connection_index]);
+        Serial.printf("PLG_>>>> apply CONNECTION #%d (%s)\n", connection_index, TRANSPORT_MODE_NAMES[connection_index]);
         transport_begin((TransportMode)connection_index); // ap dung ngay (chuyen sang mode moi), cap nhat active_connection_mode
         transport_save_mode((TransportMode)connection_index); // luu vao NVS rieng, song sot qua mat nguon
         show_connection = false;
         last_show_connection = false; // dong bo lai co, de lan sau vao CONNECTION duoc xoa man hinh dung cach
-        menu_needs_full_draw = true;
+
+        if (connection_index == TRANSPORT_BLE)
+        {
+            // BLE can hien ten thiet bi de nguoi dung biet ghep noi voi cai nao tu PC, nen vao
+            // thang man hinh trang thai thay vi quay ve menu nhu USB.
+            show_ble_status = true;
+            last_show_ble_status = false; // buoc MONITOR_BLE_STATUS xoa man hinh + ve lai tu dau
+        }
+        else
+        {
+            menu_needs_full_draw = true;
+        }
     }
     else if (desktop_state == DESKTOP_SETING && funtion_mode == FUNTION_MODE_CONNECTION)
     {
@@ -349,6 +372,7 @@ void DISPLAY_ROLL()
             show_language = false;       // luon vao menu truoc, khong vao thang man hinh chon ngon ngu
             show_clock_style = false;    // luon vao menu truoc, khong vao thang man hinh chon kieu dong ho
             show_connection = false;     // luon vao menu truoc, khong vao thang man hinh chon giao thuc ket noi
+            show_ble_status = false;     // luon vao menu truoc, khong vao thang man hinh trang thai BLE
 
             // xoa gio Task Manager o goc tren-phai khi roi HOME, tranh no bi dinh lai
             // (khong duoc xoa) tren cac man hinh khac nhu SETTING/CLOCK

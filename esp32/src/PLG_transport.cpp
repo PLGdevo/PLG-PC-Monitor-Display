@@ -1,6 +1,7 @@
 #include "PLG_transport.h"
 #include <Preferences.h>
 #include "PLG_state.h"
+#include "PLG_protocol.h"
 #include "PLG_serial_link.h"
 #include "PLG_transport_ble.h"
 #include "PLG_transport_wifi.h"
@@ -13,13 +14,16 @@ void transport_begin(TransportMode mode)
 {
     active_connection_mode = (int8_t)mode;
 
+    // Xoa dong dang do dang + quen moc "da tung nhan du lieu" cua transport truoc do: tranh
+    // dong bi cat giua chung dinh vao dong dau tien cua transport moi, va tranh hien
+    // "connected" gia tu du lieu nhan duoc TRUOC khi doi mode.
+    protocol_reset();
+
     switch (mode)
     {
     case TRANSPORT_USB:
-        // Serial.begin() da chay tu setup() (dung chung lam kenh debug cho ca 3 transport) nen
-        // khong can lam gi them; serial_link_reset_connection() dat lai moc "chua nhan du lieu"
-        // de khong hien "connected" gia tu du lieu nhan duoc truoc khi doi sang mode nay.
-        serial_link_reset_connection();
+        // Serial.begin() da chay tu setup() (dung chung lam kenh debug cho ca 3 transport)
+        // nen khong con gi phai khoi dong rieng.
         break;
     case TRANSPORT_BLE:
         transport_ble_begin();

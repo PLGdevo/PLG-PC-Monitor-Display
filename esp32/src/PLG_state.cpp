@@ -83,6 +83,9 @@ int8_t last_connection_index = -1;
 bool show_connection = false;
 bool last_show_connection = false;
 
+bool show_ble_status = false;
+bool last_show_ble_status = false;
+
 int8_t chart_cpu[CHART_SAMPLES];
 int8_t chart_ram[CHART_SAMPLES];
 int8_t chart_gpu[CHART_SAMPLES];

@@ -2,11 +2,12 @@
 #include <stdint.h>
 // Dispatcher chon nguon du lieu Task Manager: USB Serial / Bluetooth (BLE) / WiFi.
 //
-// UI (PLG_screens.cpp) va logic Task Manager (chart_push...) khong can biet du lieu den tu dau -
-// chi goi transport_poll() moi vong loop() va doc CONNECT_STATUS (PLG_state.h) de ve icon ket noi.
-// Sprint 2 hien thuc that cho USB (dung lai PLG_serial_link.cpp); BLE/WiFi la STUB (chon duoc
-// trong menu, khong crash, nhung chua truyen du lieu that) - se lam that o Sprint 3 (BLE) va
-// Sprint 4-5 (WiFi), xem README_ESP32_MIGRATION.md.
+// UI (PLG_screens.cpp) va logic Task Manager khong can biet du lieu den tu dau - chi goi
+// transport_poll() moi vong loop() va doc CONNECT_STATUS (PLG_state.h) de ve icon ket noi.
+// Viec phan tich du lieu nam o PLG_protocol.* (dung chung cho ca 3 duong truyen).
+//
+// Trang thai: USB (Sprint 1) va BLE (Sprint 3) da hien thuc that; WiFi con la STUB - chon duoc
+// trong menu, khong crash, nhung chua truyen du lieu (Sprint 4-5), xem README_ESP32_MIGRATION.md.
 
 enum TransportMode : uint8_t
 {

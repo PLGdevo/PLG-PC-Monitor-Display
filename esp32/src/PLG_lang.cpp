@@ -47,3 +47,23 @@ const char *lang_clock_style_name(int8_t index)
 // (phai ket thuc truoc x=255 do gioi han uint8_t cua TFTdrawText, xem draw_clock_cpu_ram)
 const char *lang_label_cpu() { return "C"; }
 const char *lang_label_ram() { return "R"; }
+
+const char *lang_ble_title()
+{
+    return (ui_language == UI_LANG_EN) ? "BLUETOOTH DEVICE" : "THIET BI BLUETOOTH";
+}
+
+const char *lang_status_waiting()
+{
+    return (ui_language == UI_LANG_EN) ? "Waiting for connection..." : "Dang cho ket noi...";
+}
+
+const char *lang_status_connected()
+{
+    return (ui_language == UI_LANG_EN) ? "Connected" : "Da ket noi";
+}
+
+const char *lang_hint_back()
+{
+    return (ui_language == UI_LANG_EN) ? "Press button to go back" : "Nhan nut de quay lai";
+}
