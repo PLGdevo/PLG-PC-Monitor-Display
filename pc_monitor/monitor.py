@@ -544,12 +544,14 @@ def format_log_message(m: dict) -> str:
 class ConnectionWorker:
     """Chay vong lap ket noi + gui du lieu (giong het logic console_main) trong 1
     thread nen, bao cao trang thai/log/metric ve GUI qua cac callback thay vi in
-    thang ra stdout. Dung chung cho ca che do Auto (tu do + xac thuc PLG_ID, mac
-    dinh nhu hanh vi hien tai) va Manual (ep dung 1 cong nguoi dung chon)."""
+    thang ra stdout. Dung chung cho ca 4 che do: Auto/Manual (USB Serial),
+    Bluetooth (BLE) va WiFi (TCP) - xem _run()."""
 
     def __init__(self, mode: str, port: str | None, baud: int, interval: float,
                  on_log, on_metrics, on_status) -> None:
-        self.mode = mode  # "auto" hoac "manual"
+        self.mode = mode  # "auto" | "manual" | "bluetooth" | "wifi"
+        # O che do wifi, o nhap dia chi dung chung voi o chon cong nen truong nay giu IP
+        # cua board thay vi ten cong COM.
         self.fixed_port = port
         self.baud = baud
         self.interval = interval
@@ -572,6 +574,18 @@ class ConnectionWorker:
     def _run(self) -> None:
         psutil.cpu_percent(interval=None)  # lan goi dau tra ve 0.0, bo qua de lay mau chuan
         time.sleep(0.2)
+        try:
+            if self.mode == "bluetooth":
+                self._run_ble()
+            elif self.mode == "wifi":
+                self._run_wifi()
+            else:
+                self._run_serial()
+        finally:
+            self.on_status("🔴 Chua ket noi")
+
+    # ---------------- USB Serial (che do auto/manual) ----------------
+    def _run_serial(self) -> None:
         try:
             while not self._stop.is_set():
                 if self.mode == "manual" and self.fixed_port:
@@ -619,8 +633,116 @@ class ConnectionWorker:
                     if self._stop.wait(RETRY_DELAY):
                         return
                     continue
-        finally:
-            self.on_status("🔴 Chua ket noi")
+        except Exception as exc:  # loi ngoai du tinh: bao ra GUI thay vi chet lang le trong thread
+            self.on_log("ERROR", f"Loi khong mong doi: {exc}", "error")
+
+    # ---------------- Bluetooth LE ----------------
+    def _run_ble(self) -> None:
+        try:
+            import bleak  # noqa: F401  chi de bao loi som, ro rang neu chua cai
+        except ImportError:
+            self.on_log("ERROR", "Che do Bluetooth can goi 'bleak': chay "
+                                 "'pip install bleak' rui mo lai.", "error")
+            return
+        # bleak chay tren asyncio; thread nen nay chua co event loop nao nen asyncio.run()
+        # tu tao mot cai rieng - khong dung cham gi toi vong lap cua Tkinter o thread chinh.
+        asyncio.run(self._ble_loop())
+
+    async def _ble_loop(self) -> None:
+        from bleak import BleakClient, BleakScanner
+
+        while not self._stop.is_set():
+            self.on_status(f"🟡 Dang do tim \"{BLE_DEVICE_NAME}\"...")
+            try:
+                device = await BleakScanner.find_device_by_name(BLE_DEVICE_NAME, timeout=10.0)
+                if device is None:
+                    self.on_log("WARN", f"Khong thay \"{BLE_DEVICE_NAME}\". Kiem tra board da chon "
+                                        f"SETTING > CONNECTION > BLUETOOTH chua.", "warn")
+                    await asyncio.sleep(RETRY_DELAY)
+                    continue
+
+                async with BleakClient(device) as client:
+                    reply_seen = asyncio.Event()
+                    buf = ""
+
+                    def on_notify(_sender, data: bytearray) -> None:
+                        nonlocal buf
+                        buf += data.decode("ascii", errors="ignore")
+                        if IDENTITY_REPLY in buf:
+                            reply_seen.set()
+
+                    await client.start_notify(NUS_TX_CHAR_UUID, on_notify)
+                    await _ble_send_line(client, IDENTITY_CMD.decode("ascii"))
+                    try:
+                        await asyncio.wait_for(reply_seen.wait(), timeout=5.0)
+                    except asyncio.TimeoutError:
+                        self.on_log("ERROR", f"Thiet bi khong tra loi xac thuc \"{IDENTITY_REPLY}\", "
+                                             f"co the dang chay firmware khac.", "error")
+                        await asyncio.sleep(RETRY_DELAY)
+                        continue
+
+                    self.on_status(f"🟢 Da ket noi BLE: {device.address}")
+                    self.on_log("OK", f"Da xac thuc board PLG qua BLE ({device.address}), "
+                                      f"gui du lieu moi {self.interval}s.", "ok")
+                    while client.is_connected and not self._stop.is_set():
+                        m = gather_metrics()
+                        await _ble_send_line(client, build_payload(m))
+                        self.on_metrics(m)
+                        self.on_log("DATA", format_log_message(m), "data")
+                        await asyncio.sleep(self.interval)
+
+                    if not self._stop.is_set():
+                        self.on_log("ERROR", "Mat ket noi BLE, thu ket noi lai...", "error")
+                        self.on_status("🟡 Mat ket noi, dang thu lai...")
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:  # loi BLE rat da dang theo OS/adapter, khong the liet ke het
+                self.on_log("ERROR", f"Loi BLE: {exc}, thu lai sau {RETRY_DELAY}s", "error")
+                await asyncio.sleep(RETRY_DELAY)
+
+    # ---------------- WiFi (TCP) ----------------
+    def _run_wifi(self) -> None:
+        import socket
+
+        ip = (self.fixed_port or "").strip()
+        if not ip:
+            self.on_log("ERROR", "Chua nhap dia chi IP cua board (xem tren man hinh board).", "error")
+            return
+
+        while not self._stop.is_set():
+            self.on_status(f"🟡 Dang ket noi {ip}:{WIFI_TCP_PORT}...")
+            try:
+                with socket.create_connection((ip, WIFI_TCP_PORT), timeout=5) as sock:
+                    sock.sendall(IDENTITY_CMD)
+                    sock.settimeout(5)
+                    buf = ""
+                    while IDENTITY_REPLY not in buf:
+                        chunk = sock.recv(256)
+                        if not chunk:
+                            raise ConnectionError("board dong ket noi giua chung")
+                        buf += chunk.decode("ascii", errors="ignore")
+
+                    # Tu day chi GUI, khong doc nua -> bo timeout doc de khong bi ngat oan;
+                    # mat ket noi se lo ra ngay o lenh sendall().
+                    sock.settimeout(None)
+                    self.on_status(f"🟢 Da ket noi WiFi: {ip}:{WIFI_TCP_PORT}")
+                    self.on_log("OK", f"Da xac thuc board PLG tai {ip}:{WIFI_TCP_PORT}, "
+                                      f"gui du lieu moi {self.interval}s.", "ok")
+                    while not self._stop.is_set():
+                        m = gather_metrics()
+                        sock.sendall(build_payload(m).encode("ascii"))
+                        self.on_metrics(m)
+                        self.on_log("DATA", format_log_message(m), "data")
+                        if self._stop.wait(self.interval):
+                            break
+            except OSError as exc:
+                # gom ca ConnectionRefused/timeout/mang khong toi duoc: board co the chua vao
+                # WiFi xong, hoac vua mat song - cu thu lai nhu che do USB van lam.
+                self.on_log("ERROR", f"Khong ket noi duoc toi {ip}:{WIFI_TCP_PORT} ({exc}), "
+                                     f"thu lai sau {RETRY_DELAY}s", "error")
+                self.on_status("🟡 Mat ket noi, dang thu lai...")
+                if self._stop.wait(RETRY_DELAY):
+                    return
 
 
 # Bang mau "modern dashboard" dark mode: nen tim-than gan den (thay vi xam VSCode),
@@ -794,12 +916,27 @@ def run_gui() -> int:
     port_var = tk.StringVar(value=saved_settings.get("port", ""))
     status_var = tk.StringVar(value="🔴 Chua ket noi")
 
+    # Nhan hien thi cho tung che do (de hieu hon "auto"/"manual"/"bluetooth"/"wifi" tran trui);
+    # 2 bang tra nguoc nhau de doi qua lai giua nhan tren man hinh va gia tri luu vao file.
+    MODE_LABELS = {
+        "auto": "USB - tu do cong",
+        "manual": "USB - chon cong",
+        "bluetooth": "Bluetooth (BLE)",
+        "wifi": "WiFi (TCP)",
+    }
+    MODE_FROM_LABEL = {v: k for k, v in MODE_LABELS.items()}
+
+    mode_label_var = tk.StringVar(value=MODE_LABELS.get(mode_var.get(), MODE_LABELS["auto"]))
+
     ttk.Label(conn_frame, text="Che do:").grid(row=0, column=0, sticky="w", padx=6, pady=4)
-    mode_combo = ttk.Combobox(conn_frame, textvariable=mode_var, state="readonly",
-                               values=["auto", "manual"], width=10)
+    mode_combo = ttk.Combobox(conn_frame, textvariable=mode_label_var, state="readonly",
+                               values=list(MODE_LABELS.values()), width=18)
     mode_combo.grid(row=0, column=1, sticky="w", padx=6, pady=4)
 
-    ttk.Label(conn_frame, text="Cong:").grid(row=0, column=2, sticky="w", padx=6, pady=4)
+    # O nay dung chung cho 2 muc dich tuy che do: chon cong COM (USB) hoac go dia chi IP (WiFi).
+    # Gop lam 1 thay vi them o rieng de khung ket noi khong phinh to voi 1 o luon bi khoa.
+    target_label = ttk.Label(conn_frame, text="Cong:")
+    target_label.grid(row=0, column=2, sticky="w", padx=6, pady=4)
     port_combo = ttk.Combobox(conn_frame, textvariable=port_var, state="disabled", width=14)
     port_combo.grid(row=0, column=3, sticky="w", padx=6, pady=4)
 
@@ -822,11 +959,28 @@ def run_gui() -> int:
     interval_entry.grid(row=1, column=3, sticky="w", padx=6, pady=4)
 
     def on_mode_change(*_a) -> None:
-        if mode_var.get() == "manual":
-            port_combo.configure(state="readonly")
+        mode = MODE_FROM_LABEL.get(mode_label_var.get(), "auto")
+        mode_var.set(mode)
+
+        if mode == "manual":
+            target_label.configure(text="Cong:")
+            port_combo.configure(state="readonly", values=[])
             refresh_ports()
-        else:
+            refresh_btn.configure(state="normal")
+        elif mode == "wifi":
+            # Combobox o che do "normal" = go tay duoc; danh sach goi y bo trong vi IP cua
+            # board do nguoi dung doc tren man hinh, khong the do ra tu may tinh.
+            target_label.configure(text="IP board:")
+            port_combo.configure(state="normal", values=[])
+            port_var.set(saved_settings.get("wifi_ip", ""))
+            refresh_btn.configure(state="disabled")
+        else:  # auto (tu do cong) hoac bluetooth (tu do theo ten thiet bi) - khong can nhap gi
+            target_label.configure(text="Cong:")
             port_combo.configure(state="disabled")
+            refresh_btn.configure(state="disabled" if mode == "bluetooth" else "normal")
+
+        # Baudrate chi co nghia voi USB Serial; BLE/WiFi khong dung toi.
+        baud_combo.configure(state="disabled" if mode in ("bluetooth", "wifi") else "normal")
 
     mode_combo.bind("<<ComboboxSelected>>", on_mode_change)
     on_mode_change()
@@ -1080,11 +1234,23 @@ def run_gui() -> int:
             append_log("ERROR", "Khoang gui khong hop le.", "error")
             return
         mode = mode_var.get()
-        port = port_var.get() if mode == "manual" else None
-        if mode == "manual" and not port:
-            append_log("ERROR", "Vui long chon cong o che do Manual.", "error")
+        # O nhap dia chi mang y nghia khac nhau tuy che do (cong COM hay IP), xem on_mode_change.
+        target = port_var.get().strip() if mode in ("manual", "wifi") else None
+
+        if mode == "manual" and not target:
+            append_log("ERROR", "Vui long chon cong o che do USB - chon cong.", "error")
             return
-        save_settings({"mode": mode, "port": port or "", "baud": baud, "interval": interval})
+        if mode == "wifi" and not target:
+            append_log("ERROR", "Vui long nhap dia chi IP dang hien tren man hinh board.", "error")
+            return
+
+        settings = {"mode": mode, "baud": baud, "interval": interval}
+        # Nho rieng cong COM va IP: doi qua lai giua 2 che do khong lam mat gia tri con lai.
+        settings["port"] = target if mode == "manual" else saved_settings.get("port", "")
+        settings["wifi_ip"] = target if mode == "wifi" else saved_settings.get("wifi_ip", "")
+        saved_settings.update(settings)
+        save_settings(settings)
+        port = target
         worker = ConnectionWorker(mode, port, baud, interval, on_log, on_metrics, on_status)
         worker.start()
         connect_btn.configure(state="disabled")
@@ -1093,6 +1259,7 @@ def run_gui() -> int:
         port_combo.configure(state="disabled")
         baud_combo.configure(state="disabled")
         interval_entry.configure(state="disabled")
+        refresh_btn.configure(state="disabled") # dang chay thi do lai cong cung vo nghia
         status_var.set("🟡 Dang ket noi...")
         set_status_dot(WARN_COLOR)
 
@@ -1103,10 +1270,11 @@ def run_gui() -> int:
             worker = None
         connect_btn.configure(state="normal")
         disconnect_btn.configure(state="disabled")
-        mode_combo.configure(state="normal")
-        on_mode_change()
-        baud_combo.configure(state="normal")
+        mode_combo.configure(state="readonly")
         interval_entry.configure(state="normal")
+        # on_mode_change() tu quyet dinh o nao duoc bat lai theo che do dang chon (vd BLE thi
+        # khong bat lai o cong/baudrate) - phai goi SAU cung, dung bat tay baud_combo o day.
+        on_mode_change()
         status_var.set("🔴 Chua ket noi")
         set_status_dot(DANGER)
 
