@@ -18,6 +18,7 @@ Chay:
     python monitor.py --interval 0.5   # doi khoang gui du lieu (giay)
     python monitor.py --list           # liet ke cac cong serial dang co
     python monitor.py --ble            # gui qua Bluetooth LE (board ESP32-S3)
+    python monitor.py --wifi 192.168.1.50  # gui qua WiFi toi IP hien tren man hinh board
 
 Dinh dang du lieu gui xuong board, moi dong ket thuc bang '\n':
     CPU:<int>;RAM:<int>;GPU:<int>;GPUMEM:<int>;WIFI:<int>;TEMP:<int>;TIME:<HH:MM:SS>;DATE:<DD/MM/YYYY>;BAT:<int>
@@ -1234,8 +1235,71 @@ def run_ble(interval: float) -> int:
     return 0
 
 
+# ---------------------------------------------------------------------------
+# Che do WiFi (board ESP32-S3)
+# ---------------------------------------------------------------------------
+# Board dong vai tro TCP server; ta la client go toi dia chi IP hien tren man hinh
+# cua no (SETTING > CONNECTION > WIFI). Dung lai y nguyen gather_metrics/build_payload
+# va ca bat tay PLG_ID? - chi doi duong truyen.
+WIFI_TCP_PORT = 5005
+
+
+def _wifi_session(ip: str, port: int, interval: float) -> None:
+    """Ket noi toi board, xac thuc rui gui du lieu den khi mat ket noi."""
+    import socket
+
+    print(_c(f"Dang ket noi toi board tai {ip}:{port}...", Fore.YELLOW))
+    with socket.create_connection((ip, port), timeout=5) as sock:
+        # Bat tay xac thuc giong het che do USB/BLE: tranh go nham vao mot dich vu
+        # khac dang mo cung cong tren may khac trong mang.
+        sock.sendall(IDENTITY_CMD)
+        sock.settimeout(5)
+        buf = ""
+        try:
+            while IDENTITY_REPLY not in buf:
+                chunk = sock.recv(256)
+                if not chunk:
+                    raise ConnectionError("board dong ket noi giua chung")
+                buf += chunk.decode("ascii", errors="ignore")
+        except socket.timeout:
+            print(_c(f"Dia chi {ip}:{port} khong tra loi xac thuc \"{IDENTITY_REPLY}\", "
+                     f"co the khong phai board PLG. Ngat ket noi.", Fore.RED))
+            return
+
+        print(_c(f"Da xac thuc board PLG tai {ip}:{port}, gui du lieu moi {interval}s. Ctrl+C de dung.",
+                 Fore.GREEN))
+        # Tu day tro di chi GUI, khong cho doc nua -> bo timeout doc de khong bi
+        # ngat oan; mat ket noi se lo ra ngay o lenh sendall().
+        sock.settimeout(None)
+        while True:
+            m = gather_metrics()
+            sock.sendall(build_payload(m).encode("ascii"))
+            print(format_console_line(m))
+            time.sleep(interval)
+
+
+def run_wifi(ip: str, port: int, interval: float) -> int:
+    psutil.cpu_percent(interval=None)  # lan goi dau tra ve 0.0, bo qua de lay mau chuan
+    time.sleep(0.2)
+    try:
+        while True:
+            try:
+                _wifi_session(ip, port, interval)
+            except KeyboardInterrupt:
+                raise
+            except OSError as exc:
+                # gom ca ConnectionRefused/timeout/mang khong toi duoc: board co the chua
+                # vao WiFi xong, hoac vua mat song - cu thu lai nhu che do USB van lam.
+                print(_c(f"Khong ket noi duoc toi {ip}:{port} ({exc}), thu lai sau {RETRY_DELAY}s",
+                         Fore.RED))
+            time.sleep(RETRY_DELAY)
+    except KeyboardInterrupt:
+        print("\nDa dung.")
+    return 0
+
+
 def console_main() -> int:
-    parser = argparse.ArgumentParser(description="Gui thong so CPU/RAM/GPU/WIFI xuong board PLG qua Serial hoac BLE")
+    parser = argparse.ArgumentParser(description="Gui thong so CPU/RAM/GPU/WIFI xuong board PLG qua Serial, BLE hoac WiFi")
     parser.add_argument("--port", help="Ep dung cong serial nay (vd COM5, /dev/ttyACM0), bo qua buoc tu do tim + xac thuc.")
     parser.add_argument("--baud", type=int, default=115200, help="Toc do baud (mac dinh 115200)")
     parser.add_argument("--interval", type=float, default=0.8, help="Khoang thoi gian gui du lieu, giay (mac dinh 0.8)")
@@ -1244,13 +1308,25 @@ def console_main() -> int:
     parser.add_argument("--ble", action="store_true",
                         help=f"Gui qua Bluetooth LE thay vi USB (board ESP32-S3 da chon SETTING > "
                              f"CONNECTION > BLUETOOTH, quang ba ten \"{BLE_DEVICE_NAME}\")")
+    parser.add_argument("--wifi", metavar="IP",
+                        help="Gui qua WiFi toi dia chi IP hien tren man hinh board "
+                             "(SETTING > CONNECTION > WIFI)")
+    parser.add_argument("--wifi-port", type=int, default=WIFI_TCP_PORT,
+                        help=f"Cong TCP cua board o che do WiFi (mac dinh {WIFI_TCP_PORT})")
     args = parser.parse_args()
 
     if args.gui:
         return run_gui()
 
+    if args.ble and args.wifi:
+        print(_c("Chi chon MOT duong truyen: --ble hoac --wifi, khong dung ca hai.", Fore.RED))
+        return 2
+
     if args.ble:
         return run_ble(args.interval)
+
+    if args.wifi:
+        return run_wifi(args.wifi, args.wifi_port, args.interval)
 
     if args.list:
         ports = list(serial.tools.list_ports.comports())

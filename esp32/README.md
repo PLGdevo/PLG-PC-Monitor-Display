@@ -4,8 +4,8 @@ Bản port firmware sang ESP32-S3 (PlatformIO + Arduino core). Kế hoạch đ�
 sprint nằm ở [README_ESP32_MIGRATION.md](../README_ESP32_MIGRATION.md); bản Pico gốc vẫn ở
 thư mục cha và không bị đụng tới.
 
-**Trạng thái: Sprint 3 (Bluetooth LE) — code đã viết, build sạch (0 lỗi/0 warning), chưa
-nghiệm thu trên phần cứng thật.**
+**Trạng thái: Sprint 4 (WiFi: quét mạng, nhập mật khẩu, TCP) — code đã viết, build sạch
+(0 lỗi/0 warning), chưa nghiệm thu trên phần cứng thật.**
 
 ## Quyết định kiến trúc: giữ nguyên thư viện màn hình
 
@@ -46,7 +46,6 @@ Sprint 0. Cắm PC chạy `pc_monitor/monitor.py` (bản hiện tại, không c�
 | Icon góc phải trên | Bánh răng hiện khi ở SETTING; icon sóng/gạch chéo phản ánh `CONNECT_STATUS` |
 | SETTING → CONNECTION (mục cuối menu) | Danh sách USB (COM) / BLUETOOTH / WIFI, xoay để duyệt |
 | Chọn USB, nhấn ngắn | Quay lại menu; icon kết nối vẫn phản ánh dữ liệu Serial thật (như trước) |
-| Chọn WIFI, nhấn ngắn | Quay lại menu; icon "mất kết nối" — đúng vì WiFi còn là **stub** (Sprint 4-5), Serial log in "chua trien khai" 1 lần |
 | Đổi mode rồi rút nguồn, cắm lại | Mở lại đúng mode đã chọn (NVS namespace `plg_net`, độc lập với `plg_ui` của màu/font/ngôn ngữ) |
 | Đổi lại về USB sau khi thử mode khác | Serial nhận dữ liệu lại bình thường, icon trở lại "đã kết nối" trong ~3s |
 
@@ -62,7 +61,23 @@ Sprint 0. Cắm PC chạy `pc_monitor/monitor.py` (bản hiện tại, không c�
 | Nhấn ngắn ở màn hình trạng thái BLE | Quay lại menu SETTING (BLE vẫn chạy nền) |
 | Xoay encoder ở màn hình trạng thái BLE | Không có gì thay đổi (không âm thầm đổi mục menu bên dưới) |
 
-WiFi chưa truyền dữ liệu thật — thuộc Sprint 4-5 trong `README_ESP32_MIGRATION.md`.
+### WiFi (Sprint 4)
+
+| Thao tác | Kỳ vọng |
+|---|---|
+| Chọn WIFI, nhấn ngắn | "Dang quet mang..." rồi hiện danh sách SSID kèm dBm |
+| Xoay + nhấn ngắn chọn mạng | Sang bước nhập mật khẩu, tên mạng hiện ở trên |
+| Xoay ở bánh xe ký tự | Ký tự giữa đổi (a-z → A-Z → 0-9 → ký tự đặc biệt → `[XONG]` → `[HUY]`, cuộn vòng) |
+| Nhấn ngắn | Chốt ký tự, nối vào mật khẩu hiện bên trên; **vị trí bánh xe giữ nguyên** (gõ cụm ký tự gần nhau nhanh hơn) |
+| **Giữ 2s** | Xoá lùi 1 ký tự — **không** chuyển tab HOME/SETTING như bình thường |
+| Xoay tới `[XONG]`, nhấn | "Dang ket noi..." → hiện IP cỡ lớn + `TCP 5005` |
+| Sai mật khẩu / quá 15s | "Ket noi that bai", nhấn ngắn để quét lại từ đầu |
+| Xoay tới `[HUY]`, nhấn | Thoát wizard, về menu SETTING |
+| Trên PC: `python monitor.py --wifi <IP vừa hiện>` | Bắt tay `PLG_ID?` thành công, chart cập nhật giống hệt USB/BLE |
+| Rút nguồn board, cắm lại | **Vẫn phải chạy lại wizard** — lưu IP tĩnh là Sprint 5 |
+
+Lưu IP tĩnh (khỏi phải cấu hình lại mỗi lần khởi động) thuộc Sprint 5 trong
+`README_ESP32_MIGRATION.md`.
 
 ## Cấu trúc
 
@@ -80,7 +95,8 @@ esp32/
     ├── PLG_protocol.cpp      # parse "CPU:..;RAM:..\n" + bắt tay PLG_ID? — dùng chung cho cả 3 đường truyền
     ├── PLG_transport.cpp     # dispatcher chọn USB/BLE/WiFi, riêng NVS namespace "plg_net" (mode)
     ├── PLG_transport_ble.cpp # BLE thật (NimBLE, Nordic UART Service) — Sprint 3
-    ├── PLG_transport_wifi.cpp# stub — hiện thực thật ở Sprint 4-5
+    ├── PLG_transport_wifi.cpp# WiFi thật: quét/kết nối + TCP server cổng 5005 — Sprint 4
+    ├── PLG_wifi_ui.cpp       # wizard nhiều bước: quét → chọn SSID → wheel-picker mật khẩu → IP
     ├── PLG_serial_link.cpp   # chỉ còn đọc byte từ Serial rồi đưa vào PLG_protocol
     ├── PLG_screens.cpp       # port gần như nguyên văn (1100 dòng) + MONITOR_CONNECTION/MONITOR_BLE_STATUS
     ├── PLG_charts.cpp        # copy nguyên văn (không đụng phần cứng)
@@ -114,7 +130,13 @@ esp32/
   `loop()` đang đọc chính các biến ấy để vẽ. Nên callback chỉ đẩy byte thô vào một FreeRTOS
   StreamBuffer, còn `transport_ble_poll()` (chạy trong `loop()`) mới parse.
 
+- **Wizard WiFi đảo nghĩa nút giữ**: ở mọi màn hình khác, giữ 2s = chuyển tab HOME/SETTING.
+  Trong lúc gõ mật khẩu thì xoá lùi là thao tác cần đến nhiều hơn hẳn, nên `process_input()`
+  trao toàn quyền điều khiển cho wizard khi nó đang mở; thoát wizard bằng mục `[HUY]` trong
+  bảng ký tự.
+- **Quét WiFi chạy bất đồng bộ**: `WiFi.scanNetworks()` mặc định chặn 2-5 giây — đủ để đứng
+  hình và treo cả encoder. Dùng bản async rồi hỏi `WiFi.scanComplete()` mỗi vòng `loop()`.
+
 ## Tiếp theo
 
-Sprint 4 — WiFi: quét SSID, nhập mật khẩu bằng encoder (wheel-picker), kết nối DHCP và mở TCP
-server nhận dữ liệu.
+Sprint 5 — lưu SSID/mật khẩu/IP tĩnh vào NVS để lần khởi động sau kết nối thẳng, bỏ qua wizard.

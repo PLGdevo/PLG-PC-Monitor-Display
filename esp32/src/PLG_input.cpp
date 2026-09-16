@@ -7,6 +7,7 @@
 #include "PLG_flash_settings.h"
 #include "PLG_screens.h"
 #include "PLG_transport.h"
+#include "PLG_wifi_ui.h"
 
 /*==================== Tang THO: ISR + doc su kien ====================*/
 
@@ -322,6 +323,12 @@ static void handle_button_event(ButtonEvent event)
             show_ble_status = true;
             last_show_ble_status = false; // buoc MONITOR_BLE_STATUS xoa man hinh + ve lai tu dau
         }
+        else if (connection_index == TRANSPORT_WIFI)
+        {
+            // WiFi khong the dung duoc ngay sau khi chon: phai chon mang + nhap mat khau da.
+            show_wifi_ui = true;
+            wifi_ui_enter();
+        }
         else
         {
             menu_needs_full_draw = true;
@@ -337,6 +344,26 @@ static void handle_button_event(ButtonEvent event)
 
 void process_input()
 {
+    if (show_wifi_ui)
+    {
+        // Wizard WiFi chiem toan quyen dieu khien khi dang mo, ke ca nhan GIU - trong wizard
+        // thao tac do la "xoa lui 1 ky tu" chu khong phai chuyen tab HOME/SETTING.
+        // Xem giai thich quy uoc rieng o dau PLG_wifi_ui.h.
+        wifi_ui_on_rotate(input_take_encoder_delta());
+        switch (input_take_button_event())
+        {
+        case BUTTON_SHORT_PRESS:
+            wifi_ui_on_short_press();
+            break;
+        case BUTTON_LONG_PRESS:
+            wifi_ui_on_long_press();
+            break;
+        default:
+            break;
+        }
+        return;
+    }
+
     apply_encoder_delta();
     handle_button_event(input_take_button_event());
 }
@@ -373,6 +400,7 @@ void DISPLAY_ROLL()
             show_clock_style = false;    // luon vao menu truoc, khong vao thang man hinh chon kieu dong ho
             show_connection = false;     // luon vao menu truoc, khong vao thang man hinh chon giao thuc ket noi
             show_ble_status = false;     // luon vao menu truoc, khong vao thang man hinh trang thai BLE
+            show_wifi_ui = false;        // luon vao menu truoc, khong vao thang wizard WiFi
 
             // xoa gio Task Manager o goc tren-phai khi roi HOME, tranh no bi dinh lai
             // (khong duoc xoa) tren cac man hinh khac nhu SETTING/CLOCK

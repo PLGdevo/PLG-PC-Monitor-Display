@@ -86,6 +86,8 @@ bool last_show_connection = false;
 bool show_ble_status = false;
 bool last_show_ble_status = false;
 
+bool show_wifi_ui = false;
+
 int8_t chart_cpu[CHART_SAMPLES];
 int8_t chart_ram[CHART_SAMPLES];
 int8_t chart_gpu[CHART_SAMPLES];

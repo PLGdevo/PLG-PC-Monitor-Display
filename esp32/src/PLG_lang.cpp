@@ -67,3 +67,53 @@ const char *lang_hint_back()
 {
     return (ui_language == UI_LANG_EN) ? "Press button to go back" : "Nhan nut de quay lai";
 }
+
+const char *lang_wifi_scanning()
+{
+    return (ui_language == UI_LANG_EN) ? "Scanning networks..." : "Dang quet mang...";
+}
+
+const char *lang_wifi_no_network()
+{
+    return (ui_language == UI_LANG_EN) ? "No network found" : "Khong tim thay mang nao";
+}
+
+const char *lang_wifi_pick_network()
+{
+    return (ui_language == UI_LANG_EN) ? "CHOOSE WIFI NETWORK" : "CHON MANG WIFI";
+}
+
+const char *lang_wifi_password()
+{
+    return (ui_language == UI_LANG_EN) ? "ENTER PASSWORD" : "NHAP MAT KHAU";
+}
+
+const char *lang_wifi_connecting()
+{
+    return (ui_language == UI_LANG_EN) ? "Connecting..." : "Dang ket noi...";
+}
+
+const char *lang_wifi_failed()
+{
+    return (ui_language == UI_LANG_EN) ? "Connection failed" : "Ket noi that bai";
+}
+
+const char *lang_wifi_connected()
+{
+    return (ui_language == UI_LANG_EN) ? "WIFI CONNECTED" : "DA KET NOI WIFI";
+}
+
+const char *lang_wifi_hint_password()
+{
+    return (ui_language == UI_LANG_EN) ? "Hold button = delete" : "Giu nut = xoa lui";
+}
+
+const char *lang_wifi_done()
+{
+    return (ui_language == UI_LANG_EN) ? "[DONE]" : "[XONG]";
+}
+
+const char *lang_wifi_cancel()
+{
+    return (ui_language == UI_LANG_EN) ? "[CANCEL]" : "[HUY]";
+}

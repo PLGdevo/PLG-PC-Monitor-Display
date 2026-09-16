@@ -14,6 +14,7 @@
 #include "PLG_transport.h"
 #include "PLG_charts.h"
 #include "PLG_screens.h"
+#include "PLG_wifi_ui.h"
 
 void setup()
 {
@@ -65,6 +66,8 @@ void loop()
             MONITOR_LANGUAGE();
         else if (show_clock_style)
             MONITOR_CLOCK_STYLE();
+        else if (show_wifi_ui)
+            wifi_ui_render(); // wizard nhieu buoc, tu ve theo buoc dang o (xem PLG_wifi_ui.h)
         else if (show_ble_status)
             MONITOR_BLE_STATUS();
         else if (show_connection)

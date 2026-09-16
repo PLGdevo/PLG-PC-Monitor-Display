@@ -136,6 +136,10 @@ extern bool last_show_connection;
 extern bool show_ble_status;
 extern bool last_show_ble_status;
 
+// Wizard cau hinh WiFi (quet mang -> nhap mat khau -> hien IP). Chi 1 co duy nhat o day; buoc
+// dang o trong wizard la trang thai NOI BO cua PLG_wifi_ui.cpp, khong bay ra state toan cuc.
+extern bool show_wifi_ui;
+
 /*------------------- PC Task Manager chart (nhan tu pc_monitor/monitor.py) -------------------*/
 // dinh dang du lieu nhan qua USB serial: "CPU:<int>;RAM:<int>;GPU:<int>;GPUMEM:<int>;WIFI:<int>;TEMP:<int>;TIME:..;DATE:..;BAT:<int>\n"
 #define CHART_SAMPLES 100 // so mau hien thi tren moi bieu do (= chieu rong bieu do, px)

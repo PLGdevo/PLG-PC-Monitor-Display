@@ -6,8 +6,7 @@
 // transport_poll() moi vong loop() va doc CONNECT_STATUS (PLG_state.h) de ve icon ket noi.
 // Viec phan tich du lieu nam o PLG_protocol.* (dung chung cho ca 3 duong truyen).
 //
-// Trang thai: USB (Sprint 1) va BLE (Sprint 3) da hien thuc that; WiFi con la STUB - chon duoc
-// trong menu, khong crash, nhung chua truyen du lieu (Sprint 4-5), xem README_ESP32_MIGRATION.md.
+// Ca 3 duong truyen deu da hien thuc that: USB (Sprint 1), BLE (Sprint 3), WiFi (Sprint 4).
 
 enum TransportMode : uint8_t
 {

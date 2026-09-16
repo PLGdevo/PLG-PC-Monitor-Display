@@ -36,3 +36,19 @@ const char *lang_status_connected();
 
 // dong huong dan "Nhan nut de quay lai" (thoat man hinh trang thai ve menu SETTING)
 const char *lang_hint_back();
+
+/*------------------- Wizard WiFi (PLG_wifi_ui.cpp) -------------------*/
+const char *lang_wifi_scanning();     // "Dang quet mang..."
+const char *lang_wifi_no_network();   // "Khong tim thay mang nao"
+const char *lang_wifi_pick_network(); // "Chon mang WiFi"
+const char *lang_wifi_password();     // "Nhap mat khau"
+const char *lang_wifi_connecting();   // "Dang ket noi..."
+const char *lang_wifi_failed();       // "Ket noi that bai"
+const char *lang_wifi_connected();    // "Da ket noi WiFi"
+
+// huong dan trong buoc nhap mat khau: giu nut de xoa lui (quy uoc rieng cua wizard)
+const char *lang_wifi_hint_password();
+
+// nhan cua 2 muc dac biet o cuoi bang ky tu wheel-picker
+const char *lang_wifi_done();   // "[XONG]"
+const char *lang_wifi_cancel(); // "[HUY]"
