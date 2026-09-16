@@ -3,18 +3,22 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-ESP32--S3-e7352c.svg)]()
 [![Framework](https://img.shields.io/badge/framework-Arduino--ESP32-00979d.svg)]()
-[![Status](https://img.shields.io/badge/status-Sprint%205%20in%20progress-yellow.svg)]()
+[![Status](https://img.shields.io/badge/status-backlog%20written%2C%20untested-orange-yellow.svg)]()
 
 > Tài liệu này mô tả bản thiết kế cho việc **di dời (migrate)** firmware `PLG_TFT_LCD_TASKMANAGER` từ
 > Raspberry Pi Pico (RP2040) sang **ESP32-S3**, đồng thời bổ sung khả năng kết nối không dây
 > (WiFi / Bluetooth) bên cạnh USB Serial hiện có. Xem [README.md](README.md) để biết trạng thái
 > bản Pico hiện hành.
 
-> **Trạng thái code**: Sprint 0-5 đã viết xong, **build sạch** (`esp32/`, 0 lỗi 0 warning,
-> RAM 16.4% / Flash 29.7%) nhưng **chưa nghiệm thu trên phần cứng thật** — theo Definition of
-> Done bên dưới thì chưa được tính là Done. Cả 3 đường truyền (USB/BLE/WiFi) đã truyền dữ liệu
-> thật, và WiFi đã nhớ được cấu hình qua mất nguồn.
-> Hướng dẫn build + bảng nghiệm thu: [esp32/README.md](esp32/README.md).
+> **Trạng thái code**: **toàn bộ backlog (Sprint 0-6) đã được viết**, `esp32/` build sạch
+> (0 lỗi 0 warning, RAM 16.4% / Flash 29.7%), `monitor.py` có đủ `--ble` / `--wifi <IP>`.
+>
+> Nhưng **chưa có story nào được tính là Done**: theo Definition of Done bên dưới thì phải test
+> thủ công trên phần cứng thật, mà việc đó chưa làm được. Build sạch chỉ chứng minh code hợp lệ
+> về cú pháp/kiểu, không chứng minh màn hình vẽ đúng hay encoder chạy đúng.
+>
+> Hướng dẫn build, hướng dẫn kết nối và bảng nghiệm thu từng sprint:
+> [esp32/README.md](esp32/README.md).
 
 ## Mục lục
 

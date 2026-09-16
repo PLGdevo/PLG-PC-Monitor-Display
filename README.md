@@ -6,6 +6,10 @@
 
 Firmware cho Raspberry Pi Pico điều khiển màn hình TFT ST7789 (240×320), đóng vai trò giao diện hiển thị/điều khiển cho máy cầu lông tự động PLG, đồng thời có thể hoạt động như một màn hình phụ hiển thị thông số hệ thống (CPU/RAM/GPU/WiFi/pin/giờ) đọc trực tiếp từ máy tính qua USB Serial.
 
+> 📡 **Bản ESP32-S3** (thêm Bluetooth + WiFi bên cạnh USB) nằm ở thư mục [`esp32/`](esp32/) —
+> xem [esp32/README.md](esp32/README.md) để biết cách build và hướng dẫn kết nối cho từng chế độ.
+> Bản Pico trong tài liệu này vẫn dùng bình thường, không bị ảnh hưởng.
+
 ## Mục lục
 
 - [Tính năng chính](#tính-năng-chính)
@@ -114,6 +118,15 @@ python monitor.py --port COM5      # ép dùng cổng này, bỏ qua bước dò
 python monitor.py --interval 0.5   # đổi tần suất gửi (giây), mặc định 0.8s
 python monitor.py --list           # liệt kê các cổng serial hiện có
 ```
+
+Hai cờ dưới đây chỉ dùng được với **bản ESP32-S3** (bản Pico không có Bluetooth/WiFi):
+
+```bash
+python monitor.py --ble                # gửi qua Bluetooth LE
+python monitor.py --wifi 192.168.1.50  # gửi qua WiFi tới IP hiện trên màn hình board
+```
+
+Cách bật từng chế độ trên thiết bị: xem [esp32/README.md](esp32/README.md#hướng-dẫn-kết-nối-máy-tính-với-board).
 
 **Tự động xác thực thiết bị**: thay vì phải tự chọn đúng cổng COM, script gửi lệnh `PLG_ID?` xuống lần lượt các cổng serial đang cắm (ưu tiên cổng có VID/PID giống Pico trước, sau đó thử các cổng còn lại) và chỉ coi là board hợp lệ khi nhận lại đúng câu trả lời `I AM PLG_TFT_LCD_TASKMANAGER` từ firmware (`read_taskmanager_serial()` xử lý lệnh này trong `src/PLG_serial_link.cpp`). Nhờ vậy tránh được trường hợp gửi nhầm dữ liệu xuống một thiết bị USB Serial khác có cùng VID/PID (ví dụ Pico khác chạy firmware khác).
 

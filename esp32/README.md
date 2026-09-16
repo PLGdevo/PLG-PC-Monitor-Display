@@ -4,8 +4,8 @@ Bản port firmware sang ESP32-S3 (PlatformIO + Arduino core). Kế hoạch đ�
 sprint nằm ở [README_ESP32_MIGRATION.md](../README_ESP32_MIGRATION.md); bản Pico gốc vẫn ở
 thư mục cha và không bị đụng tới.
 
-**Trạng thái: Sprint 5 (lưu IP tĩnh) — code đã viết, build sạch (0 lỗi/0 warning), chưa
-nghiệm thu trên phần cứng thật.**
+**Trạng thái: Sprint 0-6 đã viết xong, build sạch (0 lỗi/0 warning). Chưa nghiệm thu trên
+phần cứng thật — theo Definition of Done thì chưa sprint nào được tính là Done.**
 
 ## Quyết định kiến trúc: giữ nguyên thư viện màn hình
 
@@ -85,6 +85,71 @@ Sprint 0. Cắm PC chạy `pc_monitor/monitor.py` (bản hiện tại, không c�
 | Ở màn hình IP (đã lưu), **giữ 2s** | Quên mạng, quay lại bước quét để chọn mạng khác |
 | Quên mạng rồi rút nguồn, cắm lại | Phải chạy lại wizard (đúng — cấu hình đã bị xoá), nhưng **vẫn nhớ** mode WIFI đã chọn |
 
+## Hướng dẫn kết nối máy tính với board
+
+Board nhận dữ liệu qua **một** trong ba đường truyền, chọn ngay trên thiết bị ở
+**SETTING → CONNECTION** (giữ nút 2s ở HOME để vào SETTING, xoay tới CONNECTION, nhấn ngắn).
+Lựa chọn được ghi nhớ qua mất nguồn.
+
+Trên máy tính, cài một lần:
+
+```bash
+cd pc_monitor
+pip install -r requirements.txt
+```
+
+### 1. USB (mặc định)
+
+Cắm cáp USB-C, rồi:
+
+```bash
+python monitor.py
+```
+
+Script tự dò cổng COM và tự xác thực đúng board (gửi `PLG_ID?`, chờ đúng câu trả lời) nên không
+cần chọn cổng. Ép cổng cụ thể bằng `--port COM5` nếu cần.
+
+### 2. Bluetooth (BLE)
+
+1. Trên board: **SETTING → CONNECTION → BLUETOOTH**, nhấn ngắn. Màn hình hiện tên thiết bị
+   `PLG_TFT_LCD` và "Dang cho ket noi...".
+2. Trên máy tính:
+
+   ```bash
+   python monitor.py --ble
+   ```
+
+Không cần ghép nối (pair) trong Windows Settings trước — script tự dò theo tên và kết nối. Khi
+board hiện "Da ket noi" là dữ liệu đã chạy; giữ nút 2s để về HOME xem biểu đồ.
+
+### 3. WiFi
+
+Lần đầu phải chọn mạng và nhập mật khẩu ngay trên thiết bị:
+
+1. **SETTING → CONNECTION → WIFI**, nhấn ngắn → board quét mạng xung quanh.
+2. Xoay encoder chọn mạng (có kèm cường độ tín hiệu dBm), nhấn ngắn.
+3. Nhập mật khẩu bằng bánh xe ký tự:
+   - **xoay** = đổi ký tự (`a-z` → `A-Z` → `0-9` → ký tự đặc biệt → `[XONG]` → `[HUY]`)
+   - **nhấn ngắn** = chốt ký tự đang chọn
+   - **giữ 2s** = xoá lùi 1 ký tự
+   - xoay tới `[XONG]` rồi nhấn để kết nối, hoặc `[HUY]` để thoát
+4. Kết nối xong, màn hình hiện **địa chỉ IP** cỡ lớn. Gõ địa chỉ đó sang máy tính:
+
+   ```bash
+   python monitor.py --wifi 192.168.1.50
+   ```
+
+5. **Giữ nút 2s** ở màn hình IP để lưu lại thành IP tĩnh. Từ lần sau board tự kết nối thẳng
+   bằng đúng địa chỉ đó khi cắm điện — không phải nhập lại mật khẩu, và câu lệnh trên máy tính
+   vẫn dùng nguyên IP cũ.
+
+Muốn đổi sang mạng khác: vào lại màn hình IP rồi **giữ nút 2s** để quên mạng đã lưu, board sẽ
+quét lại từ đầu. Nếu mạng đã lưu không còn dùng được (đổi mật khẩu, mang board đi chỗ khác),
+sau khoảng 15 giây board tự quay lại bước quét.
+
+> Giao diện đồ hoạ (`python monitor.py --gui`) hiện **chỉ hỗ trợ USB**. BLE và WiFi dùng qua
+> dòng lệnh với `--ble` / `--wifi <IP>`.
+
 ## Cấu trúc
 
 ```
@@ -147,7 +212,8 @@ esp32/
   lựa chọn giao thức (`mode`) — xoá sạch sẽ làm "quên mạng" kéo theo mất luôn lựa chọn WIFI,
   đưa thiết bị về USB một cách khó hiểu.
 
-## Tiếp theo
+## Còn lại
 
-Sprint 6 — hoàn thiện `monitor.py` (đã có `--ble`/`--wifi`) và tài liệu hướng dẫn người dùng
-cuối cho cả 3 chế độ.
+Toàn bộ backlog trong `README_ESP32_MIGRATION.md` đã được viết. Việc còn lại là **chạy thử
+trên board thật** theo bảng nghiệm thu bên trên — không có phần cứng thì không story nào
+được tính là Done.
