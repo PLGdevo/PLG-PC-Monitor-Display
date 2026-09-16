@@ -77,6 +77,12 @@ int8_t last_language_index = -1;
 bool show_language = false;
 bool last_show_language = false;
 
+int8_t active_connection_mode = 0; // 0 = TRANSPORT_USB (xem PLG_transport.h)
+int8_t connection_index = 0;
+int8_t last_connection_index = -1;
+bool show_connection = false;
+bool last_show_connection = false;
+
 int8_t chart_cpu[CHART_SAMPLES];
 int8_t chart_ram[CHART_SAMPLES];
 int8_t chart_gpu[CHART_SAMPLES];

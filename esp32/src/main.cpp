@@ -1,5 +1,6 @@
 // Entry point: setup()/loop() cua firmware PLG TFT LCD Task Manager - ban ESP32-S3.
-// Sprint 1: dat ngang tinh nang voi ban Pico, van chi dung USB Serial (xem
+// Sprint 2: tach lop Transport (USB/BLE/WiFi, xem PLG_transport.h) + man hinh SETTING >
+// CONNECTION de chon giao thuc - BLE/WiFi con la stub, hien thuc that o Sprint 3-5 (xem
 // README_ESP32_MIGRATION.md). Logic chi tiet nam trong include/ va src/.
 
 #include <Arduino.h>
@@ -10,18 +11,19 @@
 #include "PLG_display.h"
 #include "PLG_flash_settings.h"
 #include "PLG_input.h"
-#include "PLG_serial_link.h"
+#include "PLG_transport.h"
 #include "PLG_charts.h"
 #include "PLG_screens.h"
 
 void setup()
 {
-    Serial.begin(115200);
+    Serial.begin(115200); // dung chung lam kenh debug (Serial.print...) cho ca 3 transport
     pinMode(PIN_LIGHT_BOARD, OUTPUT);
 
     setup_display();
     setup_input();
     load_settings_from_flash(); // khoi phuc mau + kieu chu dong ho da chon lan truoc (neu co)
+    transport_begin(transport_load_mode()); // khoi dong lai dung giao thuc da chon lan truoc (mac dinh USB)
 
     // -1 = "chua co du lieu that" (xem giai thich o PLG_state.h canh khai bao chart_cpu...)
     memset(chart_cpu, -1, CHART_SAMPLES);
@@ -38,7 +40,7 @@ void setup()
 void loop()
 {
     process_input();
-    read_taskmanager_serial();
+    transport_poll();
     DISPLAY_ROLL();
 
     switch (desktop_state)
@@ -63,6 +65,8 @@ void loop()
             MONITOR_LANGUAGE();
         else if (show_clock_style)
             MONITOR_CLOCK_STYLE();
+        else if (show_connection)
+            MONITOR_CONNECTION();
         else
             MONITOR_FUNTION();
         break;

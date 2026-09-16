@@ -6,6 +6,7 @@
 #include "PLG_display.h"
 #include "PLG_flash_settings.h"
 #include "PLG_screens.h"
+#include "PLG_transport.h"
 
 /*==================== Tang THO: ISR + doc su kien ====================*/
 
@@ -112,6 +113,8 @@ static void key_value_tang()
             language_index++;
         else if (show_clock_style)
             clock_style_index++;
+        else if (show_connection)
+            connection_index++;
         else
             funtion_mode++;
         break;
@@ -137,6 +140,8 @@ static void key_value_giam()
             language_index--;
         else if (show_clock_style)
             clock_style_index--;
+        else if (show_connection)
+            connection_index--;
         else
             funtion_mode--;
         break;
@@ -290,6 +295,21 @@ static void handle_button_event(ButtonEvent event)
         clock_style_index = active_clock_style; // bat dau duyet tu kieu dang dung
         show_clock_style = true;
     }
+    else if (desktop_state == DESKTOP_SETING && show_connection)
+    {
+        Serial.printf("PLG_>>>> apply CONNECTION #%d (%s), back to SETTING menu\n", connection_index, TRANSPORT_MODE_NAMES[connection_index]);
+        transport_begin((TransportMode)connection_index); // ap dung ngay (chuyen sang mode moi), cap nhat active_connection_mode
+        transport_save_mode((TransportMode)connection_index); // luu vao NVS rieng, song sot qua mat nguon
+        show_connection = false;
+        last_show_connection = false; // dong bo lai co, de lan sau vao CONNECTION duoc xoa man hinh dung cach
+        menu_needs_full_draw = true;
+    }
+    else if (desktop_state == DESKTOP_SETING && funtion_mode == FUNTION_MODE_CONNECTION)
+    {
+        Serial.println("PLG_>>>> enter CONNECTION");
+        connection_index = active_connection_mode; // bat dau duyet tu giao thuc dang dung
+        show_connection = true;
+    }
 }
 
 void process_input()
@@ -328,6 +348,7 @@ void DISPLAY_ROLL()
             show_font_size = false;      // luon vao menu truoc, khong vao thang man hinh chon co chu
             show_language = false;       // luon vao menu truoc, khong vao thang man hinh chon ngon ngu
             show_clock_style = false;    // luon vao menu truoc, khong vao thang man hinh chon kieu dong ho
+            show_connection = false;     // luon vao menu truoc, khong vao thang man hinh chon giao thuc ket noi
 
             // xoa gio Task Manager o goc tren-phai khi roi HOME, tranh no bi dinh lai
             // (khong duoc xoa) tren cac man hinh khac nhu SETTING/CLOCK

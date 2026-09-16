@@ -11,6 +11,7 @@
 #include "PLG_serial_link.h"
 #include "PLG_lang.h"
 #include "PLG_logo.hpp"
+#include "PLG_transport.h"
 
 void drawLogoFull(int16_t x, int16_t y, int16_t w, int16_t h, const uint16_t *img)
 {
@@ -53,10 +54,11 @@ void MONITOR_BEGIN()
     for (int a = 0; a <= 90; a++)
     {
         draw_loading_frame(barX, barY, barW, barH, a);
-        // Doc Serial ngay ca trong doan chay nhanh nay (khong doi den vong cho ben
-        // duoi) de tra loi bat tay "PLG_ID?" cang som cang tot ngay sau khi USB CDC
-        // san sang - rut ngan thoi gian PC nhan dien lai board sau khi rut/cam.
-        read_taskmanager_serial();
+        // Poll transport dang chon (USB/BLE/WiFi - xem PLG_transport.h) ngay ca trong doan chay
+        // nhanh nay (khong doi den vong cho ben duoi): voi USB, giup tra loi bat tay "PLG_ID?"
+        // cang som cang tot ngay sau khi cong san sang, rut ngan thoi gian PC nhan dien lai
+        // board sau khi rut/cam.
+        transport_poll();
         delay(10);
     }
 
@@ -70,7 +72,7 @@ void MONITOR_BEGIN()
     int a = 90;
     while (!taskmanager_dirty && click_count < 2)
     {
-        read_taskmanager_serial();
+        transport_poll();
 
         bool now_btn = digitalRead(button);
         if (last_btn == 1 && now_btn == 0) // canh nhan xuong = 1 lan click
@@ -1053,6 +1055,52 @@ void MONITOR_LANGUAGE()
         draw_language_row(last_language_index, false);
         draw_language_row(language_index, true);
         last_language_index = language_index;
+    }
+}
+
+/*------------------- Man hinh chon giao thuc ket noi PC (USB/BLUETOOTH/WIFI) -------------------*/
+// ve 1 dong ten giao thuc (idx: 0=USB,1=BLUETOOTH,2=WIFI); cau truc + vi tri giong het
+// draw_language_row (tai dung TRANSPORT_MODE_COUNT thay UI_LANG_COUNT, 3 muc thay vi 2)
+static const int16_t CONNECTION_ROW_Y[TRANSPORT_MODE_COUNT] = {50, 90, 130};
+static void draw_connection_row(int8_t idx, bool selected)
+{
+    const char *name = TRANSPORT_MODE_NAMES[idx];
+    int16_t textW = (int16_t)strlen(name) * 3 * (5 + 1); // size3
+    int16_t x = (320 - textW) / 2;
+    uint16_t fg = selected ? UI_ACCENT : UI_TEXT_DIM;
+    myTFT.TFTfillRect(0, CONNECTION_ROW_Y[idx] - 3, 320, 30, UI_BG);
+    myTFT.TFTdrawText(x, CONNECTION_ROW_Y[idx], (char *)name, fg, UI_BG, 3);
+}
+
+// dung encoder duyet qua USB/BLUETOOTH/WIFI, nhan nut de ap dung va quay lai menu SETTING.
+// Cau truc tuong tu MONITOR_LANGUAGE/MONITOR_CLOCK_STYLE.
+void MONITOR_CONNECTION()
+{
+    MONITOR_STATUS();
+
+    connection_index = (int8_t)(((connection_index % TRANSPORT_MODE_COUNT) + TRANSPORT_MODE_COUNT) % TRANSPORT_MODE_COUNT);
+
+    if (last_show_connection != show_connection)
+    {
+        last_show_connection = show_connection;
+        myTFT.TFTfillRect(0, 24, 320, 216, UI_BG);
+        last_connection_index = -1;
+    }
+
+    if (last_connection_index < 0)
+    {
+        for (int8_t i = 0; i < TRANSPORT_MODE_COUNT; i++)
+            draw_connection_row(i, i == connection_index);
+        const char *hint = lang_hint_apply();
+        int16_t hintX = (320 - (int16_t)strlen(hint) * 6) / 2;
+        myTFT.TFTdrawText(hintX, 175, (char *)hint, UI_TEXT_DIM, UI_BG, 1);
+        last_connection_index = connection_index;
+    }
+    else if (last_connection_index != connection_index)
+    {
+        draw_connection_row(last_connection_index, false);
+        draw_connection_row(connection_index, true);
+        last_connection_index = connection_index;
     }
 }
 

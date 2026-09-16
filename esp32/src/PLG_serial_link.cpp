@@ -4,6 +4,23 @@
 #include <stdio.h>
 #include "PLG_state.h"
 
+// "Heartbeat" ket noi: moc thoi gian (millis) cua dong hop le gan nhat + co "da tung nhan".
+// Co rieng vi millis()==0 luc vua boot la gia tri hop le, khong the dung no lam dau hieu
+// "chua bao gio nhan du lieu".
+static uint32_t last_rx_ms = 0;
+static bool has_rx_ever = false;
+static const uint32_t CONNECTION_TIMEOUT_MS = 3000;
+
+bool serial_link_is_connected()
+{
+    return has_rx_ever && (millis() - last_rx_ms < CONNECTION_TIMEOUT_MS);
+}
+
+void serial_link_reset_connection()
+{
+    has_rx_ever = false;
+}
+
 void chart_push(int8_t *buf, int value, int cap)
 {
     if (value < 0)
@@ -26,6 +43,10 @@ void read_taskmanager_serial()
             if (serial_line_len > 0)
             {
                 serial_line_buf[serial_line_len] = '\0';
+                // Bat ky dong nao doc duoc trot lot (ke ca bat tay PLG_ID?) deu tinh la "co tin
+                // hieu song" tu PC - khong doi den khi parse ra CPU/RAM... moi coi la connected.
+                last_rx_ms = millis();
+                has_rx_ever = true;
                 // Bat tay nhan dien thiet bi: monitor.py gui "PLG_ID?" khi do cong tu dong,
                 // board tra loi cau co dinh nay de PC xac nhan dung la board PLG (khong
                 // phai thiet bi USB Serial khac) ma khong can nguoi dung tu chon cong.

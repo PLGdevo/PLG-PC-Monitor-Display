@@ -4,9 +4,9 @@
 // thu vien font chi ho tro ASCII (khong dau) -> ban VI o day la tieng Viet khong dau, giu nguyen
 // text goc da dung truoc khi co tinh nang doi ngon ngu; ban EN la tieng Anh tuong duong.
 static const char *const MENU_LABELS_VI[FUNTION_MODE_COUNT] = {
-    "PLAYER", "FUNTION", "MODE", "CLOCK", "COLOR", "FONT", "TASK", "LANGUAGE", "CLOCK STYLE"};
+    "PLAYER", "FUNTION", "MODE", "CLOCK", "COLOR", "FONT", "TASK", "LANGUAGE", "CLOCK STYLE", "CONNECTION"};
 static const char *const MENU_LABELS_EN[FUNTION_MODE_COUNT] = {
-    "PLAYER", "FUNCTION", "MODE", "CLOCK", "COLOR", "FONT", "TASK", "LANGUAGE", "CLOCK STYLE"};
+    "PLAYER", "FUNCTION", "MODE", "CLOCK", "COLOR", "FONT", "TASK", "LANGUAGE", "CLOCK STYLE", "CONNECTION"};
 
 static const char *const LANG_NAMES_VI[UI_LANG_COUNT] = {"TIENG VIET", "TIENG ANH"};
 static const char *const LANG_NAMES_EN[UI_LANG_COUNT] = {"VIETNAMESE", "ENGLISH"};

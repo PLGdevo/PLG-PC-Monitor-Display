@@ -70,7 +70,8 @@ extern MONITOR_DESTOP desktop_state;
 #define FUNTION_MODE_TASK 6  // chon de mo man hinh Task Manager (CPU/RAM/GPU/WIFI)
 #define FUNTION_MODE_LANGUAGE 7 // chon de mo man hinh doi ngon ngu giao dien (VI/EN)
 #define FUNTION_MODE_CLOCK_STYLE 8 // chon de mo man hinh chon kieu hien thi dong ho: SO (digital) / KIM (analog)
-#define FUNTION_MODE_COUNT 9
+#define FUNTION_MODE_CONNECTION 9  // chon de mo man hinh chon giao thuc ket noi PC: USB/BLUETOOTH/WIFI (xem PLG_transport.h)
+#define FUNTION_MODE_COUNT 10
 
 extern int8_t color_index;
 extern int8_t last_color_index;
@@ -120,6 +121,15 @@ extern int8_t language_index;      // muc dang duyet trong man hinh chon ngon ng
 extern int8_t last_language_index; // -1 khi vua vao/can ve lai toan bo
 extern bool show_language;         // true khi dang xem man hinh chon ngon ngu
 extern bool last_show_language;
+
+/*------------------- Giao thuc ket noi PC: USB/BLUETOOTH/WIFI (xem PLG_transport.h) -------------------*/
+// Kieu int8_t (khong phai enum TransportMode) de PLG_state.h khong phai include PLG_transport.h -
+// giu dung quy uoc cua file nay: chi luu du lieu tho, khong phu thuoc cac module khac.
+extern int8_t active_connection_mode; // giao thuc dang dung, luu vao NVS rieng (transport_save_mode)
+extern int8_t connection_index;       // muc dang duyet trong man hinh chon giao thuc (nhu color_index)
+extern int8_t last_connection_index;  // -1 khi vua vao/can ve lai toan bo
+extern bool show_connection;          // true khi dang xem man hinh chon giao thuc ket noi
+extern bool last_show_connection;
 
 /*------------------- PC Task Manager chart (nhan tu pc_monitor/monitor.py) -------------------*/
 // dinh dang du lieu nhan qua USB serial: "CPU:<int>;RAM:<int>;GPU:<int>;GPUMEM:<int>;WIFI:<int>;TEMP:<int>;TIME:..;DATE:..;BAT:<int>\n"

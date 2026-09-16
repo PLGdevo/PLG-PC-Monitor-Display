@@ -28,6 +28,10 @@ void MONITOR_COLOR();
 // quay lai menu SETTING.
 void MONITOR_LANGUAGE();
 
+// man hinh chon giao thuc ket noi PC: USB/BLUETOOTH/WIFI (xem PLG_transport.h). Nhan nut de ap
+// dung (goi transport_begin + luu NVS rieng qua transport_save_mode) va quay lai menu SETTING.
+void MONITOR_CONNECTION();
+
 // man hinh chon kieu hien thi dong ho: SO DIEN TU (digital, ho/co chu chon o FONT) hoac
 // KIM (analog, mat tron + kim gio/phut/giay). Nhan nut de ap dung (luu flash) va quay lai menu SETTING.
 void MONITOR_CLOCK_STYLE();

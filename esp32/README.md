@@ -4,8 +4,8 @@ Bản port firmware sang ESP32-S3 (PlatformIO + Arduino core). Kế hoạch đ�
 sprint nằm ở [README_ESP32_MIGRATION.md](../README_ESP32_MIGRATION.md); bản Pico gốc vẫn ở
 thư mục cha và không bị đụng tới.
 
-**Trạng thái: Sprint 1 (tính năng ngang bằng bản Pico qua USB Serial) — code đã viết, build
-sạch (0 lỗi/0 warning), chưa nghiệm thu trên phần cứng thật.**
+**Trạng thái: Sprint 2 (lớp Transport + màn hình chọn kết nối) — code đã viết, build sạch
+(0 lỗi/0 warning), chưa nghiệm thu trên phần cứng thật.**
 
 ## Quyết định kiến trúc: giữ nguyên thư viện màn hình
 
@@ -44,9 +44,14 @@ Sprint 0. Cắm PC chạy `pc_monitor/monitor.py` (bản hiện tại, không c�
 | Trong SETTING: xoay + nhấn ngắn | Duyệt PLAYER/FUNTION/MODE/ID/COLOR/FONT/TASK/LANGUAGE/CLOCK STYLE, đổi màu/font/ngôn ngữ/kiểu đồng hồ |
 | Đổi màu/font/ngôn ngữ rồi rút nguồn, cắm lại | Giữ đúng lựa chọn đã chọn (NVS) |
 | Icon góc phải trên | Bánh răng hiện khi ở SETTING; icon sóng/gạch chéo phản ánh `CONNECT_STATUS` |
+| SETTING → CONNECTION (mục cuối menu) | Danh sách USB (COM) / BLUETOOTH / WIFI, xoay để duyệt |
+| Chọn USB, nhấn ngắn | Quay lại menu; icon kết nối vẫn phản ánh dữ liệu Serial thật (như trước) |
+| Chọn BLUETOOTH hoặc WIFI, nhấn ngắn | Quay lại menu; icon kết nối chuyển sang "mất kết nối" (X) — đúng vì 2 giao thức này còn là **stub** (Sprint 3-5), Serial log in "chua trien khai" 1 lần |
+| Đổi sang BLUETOOTH/WIFI rồi rút nguồn, cắm lại | Mở lại đúng mode đã chọn (đọc từ NVS namespace `plg_net`, độc lập với `plg_ui` của màu/font/ngôn ngữ) |
+| Đổi lại về USB sau khi thử BLE/WiFi | Serial nhận dữ liệu lại bình thường, icon trở lại "đã kết nối" trong ~3s |
 
-Đây vẫn là Sprint 1 (chỉ USB Serial) — chưa có màn hình chọn kết nối (`CONNECTION`), BLE, hay
-WiFi; các mục đó thuộc Sprint 2 trở đi trong `README_ESP32_MIGRATION.md`.
+Đây là Sprint 2 — chỉ **chọn được** giao thức, BLE/WiFi chưa truyền dữ liệu thật; mục đó thuộc
+Sprint 3 (BLE) và Sprint 4-5 (WiFi) trong `README_ESP32_MIGRATION.md`.
 
 ## Cấu trúc
 
@@ -60,11 +65,14 @@ esp32/
     ├── PLG_pins.cpp          # pinout ESP32-S3 mới (khác bản Pico)
     ├── PLG_display.cpp       # khởi tạo SPI/TFT + ui_drawText (port sang Arduino API)
     ├── PLG_input.cpp         # encoder qua attachInterrupt + dispatch UI (port + tách tầng, xem dưới)
-    ├── PLG_flash_settings.cpp# NVS (Preferences) thay cho raw flash sector
-    ├── PLG_serial_link.cpp   # Serial.available()/read() thay getchar_timeout_us (port 1:1)
-    ├── PLG_screens.cpp       # port gần như nguyên văn (1100 dòng, chỉ đổi sleep_ms→delay, gpio_get→digitalRead)
+    ├── PLG_flash_settings.cpp# NVS (Preferences) thay cho raw flash sector — mau/font/ngôn ngữ
+    ├── PLG_transport.cpp     # dispatcher chọn USB/BLE/WiFi, riêng NVS namespace "plg_net" (mode)
+    ├── PLG_transport_ble.cpp # stub Sprint 2 — hiện thực thật ở Sprint 3
+    ├── PLG_transport_wifi.cpp# stub Sprint 2 — hiện thực thật ở Sprint 4-5
+    ├── PLG_serial_link.cpp   # Serial.available()/read() thay getchar_timeout_us + theo dõi "còn nhận được dữ liệu không"
+    ├── PLG_screens.cpp       # port gần như nguyên văn (1100 dòng) + MONITOR_CONNECTION mới
     ├── PLG_charts.cpp        # copy nguyên văn (không đụng phần cứng)
-    └── PLG_state/theme/lang.cpp  # copy nguyên văn (không đụng phần cứng)
+    └── PLG_state/theme/lang.cpp  # copy nguyên văn + field mới cho SETTING > CONNECTION
 ```
 
 ## Khác biệt so với bản Pico (đã có chủ đích)
@@ -81,8 +89,15 @@ esp32/
 - **Tốc độ SPI 40MHz** thay vì truyền 125000 kHz như bản Pico: trường `_speedSPIKHz` của thư
   viện là `uint16_t` (tối đa 65535) nên giá trị lớn hơn sẽ **bị tràn**, không phải bị kẹp xuống
   trần phần cứng như pico-SDK vẫn làm.
+- **`CONNECT_STATUS` giờ mới thực sự được dùng**: trong bản Pico, biến này tồn tại và có vẽ icon
+  ở `MONITOR_STATUS()` nhưng **không có nơi nào từng gán `true`** — icon kết nối luôn hiện trạng
+  thái "mất kết nối". `PLG_transport.cpp` là nơi đầu tiên gán giá trị này (theo
+  `serial_link_is_connected()`/`transport_ble_is_connected()`/`transport_wifi_is_connected()`).
+- **NVS tách 2 namespace**: `plg_ui` (màu/font/ngôn ngữ/kiểu đồng hồ, trong `PLG_flash_settings.cpp`)
+  và `plg_net` (giao thức kết nối, trong `PLG_transport.cpp`) — độc lập vì khác bản chất cấu hình,
+  và Sprint 5 sẽ cần thêm SSID/mật khẩu/IP tĩnh vào đúng namespace `plg_net` này.
 
 ## Tiếp theo
 
-Sprint 2 — tách lớp Transport (`PLG_transport.*`) + màn hình `SETTING → CONNECTION` chọn
-USB/Bluetooth/WiFi (UI chọn mode trước, BLE/WiFi thật làm ở Sprint 3-5).
+Sprint 3 — hiện thực BLE thật (`NimBLE-Arduino` GATT server) trong `PLG_transport_ble.cpp`,
+màn hình `MONITOR_BLE_STATUS` hiện tên thiết bị + trạng thái chờ/đã kết nối.
