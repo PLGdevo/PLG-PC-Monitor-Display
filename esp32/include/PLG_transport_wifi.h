@@ -48,3 +48,28 @@ bool wifi_is_online();
 
 // Dia chi IP board dang duoc cap, dang chuoi "192.168.x.x". Tra ve "0.0.0.0" khi chua vao mang.
 const char *wifi_local_ip_str();
+
+/*------------------- Cau hinh WiFi da luu (1 bo duy nhat) -------------------*/
+// Luu vao cung namespace NVS "plg_net" voi giao thuc dang chon (PLG_transport.cpp), khac key.
+// Chi giu DUNG 1 bo: thiet bi nay gan co dinh voi 1 may tinh/1 mang, danh sach nhieu mang chi
+// lam UI phuc tap them ma khong giai quyet nhu cau that nao.
+//
+// Luu ca IP/gateway/subnet/DNS (khong chi SSID/mat khau) de nhung lan sau ket noi bang dia chi
+// TINH: PC luon go toi dung mot dia chi, khong phai do lai moi khi router cap IP khac.
+
+// true neu da co cau hinh luu (du de bo qua wizard va ket noi thang).
+bool wifi_config_exists();
+
+// Luu SSID/mat khau + dia chi IP/gateway/subnet/DNS DANG DUNG thanh cau hinh tinh.
+// Goi khi dang online (cac dia chi duoc lay tu ket noi hien tai), ghi de bo cu neu co.
+bool wifi_config_save(const char *ssid, const char *password);
+
+// Xoa cau hinh da luu ("quen mang"), buoc lan sau phai chay lai wizard.
+void wifi_config_clear();
+
+// Ket noi bang cau hinh da luu (WiFi.config dia chi tinh + WiFi.begin). Khong chan - theo doi
+// bang wifi_is_online() nhu wifi_connect(). Tra ve false neu chua co cau hinh nao duoc luu.
+bool wifi_connect_saved();
+
+// SSID trong cau hinh da luu, de hien len man hinh. Tra ve "" neu chua luu gi.
+const char *wifi_config_ssid();

@@ -4,8 +4,8 @@ Bản port firmware sang ESP32-S3 (PlatformIO + Arduino core). Kế hoạch đ�
 sprint nằm ở [README_ESP32_MIGRATION.md](../README_ESP32_MIGRATION.md); bản Pico gốc vẫn ở
 thư mục cha và không bị đụng tới.
 
-**Trạng thái: Sprint 4 (WiFi: quét mạng, nhập mật khẩu, TCP) — code đã viết, build sạch
-(0 lỗi/0 warning), chưa nghiệm thu trên phần cứng thật.**
+**Trạng thái: Sprint 5 (lưu IP tĩnh) — code đã viết, build sạch (0 lỗi/0 warning), chưa
+nghiệm thu trên phần cứng thật.**
 
 ## Quyết định kiến trúc: giữ nguyên thư viện màn hình
 
@@ -74,10 +74,16 @@ Sprint 0. Cắm PC chạy `pc_monitor/monitor.py` (bản hiện tại, không c�
 | Sai mật khẩu / quá 15s | "Ket noi that bai", nhấn ngắn để quét lại từ đầu |
 | Xoay tới `[HUY]`, nhấn | Thoát wizard, về menu SETTING |
 | Trên PC: `python monitor.py --wifi <IP vừa hiện>` | Bắt tay `PLG_ID?` thành công, chart cập nhật giống hệt USB/BLE |
-| Rút nguồn board, cắm lại | **Vẫn phải chạy lại wizard** — lưu IP tĩnh là Sprint 5 |
+### Lưu IP tĩnh (Sprint 5)
 
-Lưu IP tĩnh (khỏi phải cấu hình lại mỗi lần khởi động) thuộc Sprint 5 trong
-`README_ESP32_MIGRATION.md`.
+| Thao tác | Kỳ vọng |
+|---|---|
+| Ở màn hình IP, **giữ 2s** | Hiện "Da luu"; dòng gợi ý đổi thành "Giu nut = quen mang" |
+| Rút nguồn, cắm lại | Tự kết nối thẳng bằng IP tĩnh đã lưu — **không** chạy lại wizard, `monitor.py --wifi <IP cũ>` dùng được ngay |
+| Vào lại SETTING → CONNECTION → WIFI | Vào thẳng "Dang ket noi..." rồi ra màn hình IP, bỏ qua bước quét/nhập mật khẩu |
+| Đổi mật khẩu router / mang board đi chỗ khác | Sau ~15s không vào được → **tự** quay lại bước quét, không kẹt ở màn hình lỗi |
+| Ở màn hình IP (đã lưu), **giữ 2s** | Quên mạng, quay lại bước quét để chọn mạng khác |
+| Quên mạng rồi rút nguồn, cắm lại | Phải chạy lại wizard (đúng — cấu hình đã bị xoá), nhưng **vẫn nhớ** mode WIFI đã chọn |
 
 ## Cấu trúc
 
@@ -95,7 +101,7 @@ esp32/
     ├── PLG_protocol.cpp      # parse "CPU:..;RAM:..\n" + bắt tay PLG_ID? — dùng chung cho cả 3 đường truyền
     ├── PLG_transport.cpp     # dispatcher chọn USB/BLE/WiFi, riêng NVS namespace "plg_net" (mode)
     ├── PLG_transport_ble.cpp # BLE thật (NimBLE, Nordic UART Service) — Sprint 3
-    ├── PLG_transport_wifi.cpp# WiFi thật: quét/kết nối + TCP server cổng 5005 — Sprint 4
+    ├── PLG_transport_wifi.cpp# WiFi thật: quét/kết nối + TCP server 5005 + lưu IP tĩnh (NVS)
     ├── PLG_wifi_ui.cpp       # wizard nhiều bước: quét → chọn SSID → wheel-picker mật khẩu → IP
     ├── PLG_serial_link.cpp   # chỉ còn đọc byte từ Serial rồi đưa vào PLG_protocol
     ├── PLG_screens.cpp       # port gần như nguyên văn (1100 dòng) + MONITOR_CONNECTION/MONITOR_BLE_STATUS
@@ -137,6 +143,11 @@ esp32/
 - **Quét WiFi chạy bất đồng bộ**: `WiFi.scanNetworks()` mặc định chặn 2-5 giây — đủ để đứng
   hình và treo cả encoder. Dùng bản async rồi hỏi `WiFi.scanComplete()` mỗi vòng `loop()`.
 
+- **Xoá cấu hình WiFi phải xoá từng key, không `prefs.clear()`**: namespace `plg_net` còn giữ cả
+  lựa chọn giao thức (`mode`) — xoá sạch sẽ làm "quên mạng" kéo theo mất luôn lựa chọn WIFI,
+  đưa thiết bị về USB một cách khó hiểu.
+
 ## Tiếp theo
 
-Sprint 5 — lưu SSID/mật khẩu/IP tĩnh vào NVS để lần khởi động sau kết nối thẳng, bỏ qua wizard.
+Sprint 6 — hoàn thiện `monitor.py` (đã có `--ble`/`--wifi`) và tài liệu hướng dẫn người dùng
+cuối cho cả 3 chế độ.

@@ -52,3 +52,12 @@ const char *lang_wifi_hint_password();
 // nhan cua 2 muc dac biet o cuoi bang ky tu wheel-picker
 const char *lang_wifi_done();   // "[XONG]"
 const char *lang_wifi_cancel(); // "[HUY]"
+
+// huong dan o man hinh hien IP: giu nut de luu thanh IP tinh (khi chua luu)
+const char *lang_wifi_hint_save();
+
+// huong dan o man hinh hien IP: giu nut de quen mang (khi da luu)
+const char *lang_wifi_hint_forget();
+
+// bao da luu cau hinh thanh cong
+const char *lang_wifi_saved();

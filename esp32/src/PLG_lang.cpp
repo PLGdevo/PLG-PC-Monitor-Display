@@ -117,3 +117,18 @@ const char *lang_wifi_cancel()
 {
     return (ui_language == UI_LANG_EN) ? "[CANCEL]" : "[HUY]";
 }
+
+const char *lang_wifi_hint_save()
+{
+    return (ui_language == UI_LANG_EN) ? "Hold button = save static IP" : "Giu nut = luu IP tinh";
+}
+
+const char *lang_wifi_hint_forget()
+{
+    return (ui_language == UI_LANG_EN) ? "Hold button = forget network" : "Giu nut = quen mang";
+}
+
+const char *lang_wifi_saved()
+{
+    return (ui_language == UI_LANG_EN) ? "Saved" : "Da luu";
+}

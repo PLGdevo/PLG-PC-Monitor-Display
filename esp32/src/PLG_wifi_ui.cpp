@@ -42,6 +42,15 @@ static uint32_t connect_started_ms = 0;
 // thay vi treo man hinh mai.
 static const uint32_t CONNECT_TIMEOUT_MS = 15000;
 
+// Lan ket noi nay dung cau hinh da luu (true) hay do nguoi dung vua go tay (false)?
+// Quyet dinh 2 thu: that bai thi tu quay lai buoc quet (thay vi dung man hinh loi), va o man
+// hinh IP thi nut giu mang nghia "quen mang" thay vi "luu IP tinh".
+static bool using_saved_config = false;
+
+// Da bam luu trong phien nay chua - de doi dong huong dan sang "giu nut = quen mang" ngay,
+// khong bat nguoi dung thoat ra vao lai moi thay.
+static bool just_saved = false;
+
 /*==================== Bang ky tu cua wheel-picker ====================*/
 // Thu tu dat theo tan suat go mat khau WiFi: chu thuong -> chu hoa -> so -> ky tu dac biet.
 // Dau cach de o cuoi nhom ky tu dac biet vi rat it mat khau dung toi.
@@ -176,7 +185,9 @@ static void go_to(WifiUiStep next)
     needs_full_draw = true;
 }
 
-void wifi_ui_enter()
+// Bat dau lai tu buoc QUET (bo qua cau hinh da luu). Dung khi nguoi dung chu dong quen mang,
+// hoac khi ket noi bang cau hinh da luu that bai.
+static void start_scan_wizard()
 {
     password[0] = '\0';
     password_len = 0;
@@ -187,9 +198,29 @@ void wifi_ui_enter()
     last_drawn_ssid_index = -1;
     last_drawn_char_index = -1;
     last_drawn_password_len = 255;
+    using_saved_config = false;
+    just_saved = false;
 
     wifi_scan_start();
     go_to(STEP_SCANNING);
+}
+
+void wifi_ui_enter()
+{
+    // Da co cau hinh luu tu lan truoc -> ket noi thang bang dia chi tinh, bo qua toan bo
+    // wizard. Day chinh la muc dich cua viec luu: khong phai go lai mat khau moi lan boot.
+    if (wifi_config_exists() && wifi_connect_saved())
+    {
+        strncpy(chosen_ssid, wifi_config_ssid(), sizeof(chosen_ssid) - 1);
+        chosen_ssid[sizeof(chosen_ssid) - 1] = '\0';
+        using_saved_config = true;
+        just_saved = false;
+        connect_started_ms = millis();
+        go_to(STEP_CONNECTING);
+        return;
+    }
+
+    start_scan_wizard();
 }
 
 void wifi_ui_exit()
@@ -288,7 +319,17 @@ void wifi_ui_render()
         }
         if (millis() - connect_started_ms > CONNECT_TIMEOUT_MS)
         {
-            go_to(STEP_FAILED);
+            if (using_saved_config)
+            {
+                // Mang da luu gio khong con (doi mat khau, di cho khac...): tu chay lai wizard
+                // thay vi dung o man hinh loi bat nguoi dung tu mo lai.
+                Serial.println("PLG_>>>> WIFI: mang da luu khong ket noi duoc, quet lai");
+                start_scan_wizard();
+            }
+            else
+            {
+                go_to(STEP_FAILED);
+            }
         }
         break;
     }
@@ -311,7 +352,10 @@ void wifi_ui_render()
             char port_line[32];
             snprintf(port_line, sizeof(port_line), "TCP %d", WIFI_TCP_PORT);
             draw_line(175, port_line, UI_TEXT_DIM, 1, 16);
-            draw_line(205, lang_hint_back(), UI_TEXT_DIM, 1, 16);
+            // Da luu roi thi nut giu dung de QUEN mang; chua luu thi de LUU thanh IP tinh.
+            bool saved = using_saved_config || just_saved;
+            draw_line(196, saved ? lang_wifi_hint_forget() : lang_wifi_hint_save(), UI_TEXT_DIM, 1, 16);
+            draw_line(214, lang_hint_back(), UI_TEXT_DIM, 1, 16);
         }
         break;
     }
@@ -391,8 +435,9 @@ void wifi_ui_on_short_press()
         break; // dang ket noi, de no chay het thoi gian cho
 
     case STEP_FAILED:
-        // Thu lai tu dau: quet lai mang (mat khau cu da bi xoa trong wifi_ui_enter)
-        wifi_ui_enter();
+        // Thu lai tu dau: quet lai mang. Dung start_scan_wizard chu khong phai wifi_ui_enter -
+        // neu goi wifi_ui_enter thi no lai lay cau hinh da luu ra thu tiep, lap vo tan.
+        start_scan_wizard();
         break;
 
     case STEP_DONE:
@@ -403,10 +448,30 @@ void wifi_ui_on_short_press()
 
 void wifi_ui_on_long_press()
 {
-    // Chi co y nghia o buoc nhap mat khau: xoa lui 1 ky tu. O cac buoc khac, nuot luon thao
-    // tac nay de khong vo tinh chuyen tab HOME/SETTING giua chung wizard.
-    if (wizard_step == STEP_PASSWORD && password_len > 0)
+    // Nut giu mang y nghia khac nhau theo buoc; o cac buoc khong liet ke thi nuot luon thao tac
+    // nay de khong vo tinh chuyen tab HOME/SETTING giua chung wizard.
+    if (wizard_step == STEP_PASSWORD)
     {
-        password[--password_len] = '\0';
+        if (password_len > 0)
+            password[--password_len] = '\0';
+        return;
+    }
+
+    if (wizard_step == STEP_DONE)
+    {
+        if (using_saved_config || just_saved)
+        {
+            // Quen mang: xoa cau hinh roi chay lai wizard tu buoc quet, de doi sang mang khac.
+            wifi_config_clear();
+            start_scan_wizard();
+        }
+        else if (wifi_config_save(chosen_ssid, password))
+        {
+            just_saved = true;
+            needs_full_draw = true; // ve lai man hinh: dong huong dan doi sang "giu nut = quen mang"
+            // Bao da luu ngay tren man hinh - ghi NVS khong co dau hieu nhin thay nao khac.
+            draw_line(140, lang_wifi_saved(), UI_CPU, 2, 24);
+            delay(700); // du de doc dong bao truoc khi man hinh ve lai
+        }
     }
 }

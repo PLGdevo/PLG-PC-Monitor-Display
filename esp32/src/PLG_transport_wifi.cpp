@@ -1,7 +1,12 @@
 #include "PLG_transport_wifi.h"
 #include <Arduino.h>
 #include <WiFi.h>
+#include <Preferences.h>
 #include "PLG_protocol.h"
+
+// Cung namespace voi giao thuc ket noi dang chon (PLG_transport.cpp), khac key - deu la "cau
+// hinh mang", tach ra 2 namespace chi lam kho theo doi.
+static const char *NVS_NAMESPACE = "plg_net";
 
 static WiFiServer tcp_server(WIFI_TCP_PORT);
 static WiFiClient tcp_client;
@@ -32,6 +37,12 @@ void transport_wifi_begin()
         tcp_server.setNoDelay(true); // gui ngay, khong gom goi (Nagle) - du lieu cua ta nho va can tuc thi
         server_started = true;
     }
+
+    // Da co cau hinh luu tu lan truoc -> ket noi lai ngay khi khoi dong, khong cho nguoi dung
+    // phai vao SETTING > CONNECTION > WIFI moi chiu ket noi. Day la ca diem cua Sprint 5:
+    // cam dien la chay, PC go thang toi dung IP tinh cu.
+    if (wifi_config_exists())
+        wifi_connect_saved();
 }
 
 void transport_wifi_poll()
@@ -127,4 +138,97 @@ const char *wifi_local_ip_str()
     strncpy(ip_buf, s.c_str(), sizeof(ip_buf) - 1);
     ip_buf[sizeof(ip_buf) - 1] = '\0';
     return ip_buf;
+}
+
+/*------------------- Cau hinh WiFi da luu -------------------*/
+
+bool wifi_config_exists()
+{
+    Preferences prefs;
+    if (!prefs.begin(NVS_NAMESPACE, true)) // true = chi doc
+        return false;
+    bool exists = prefs.isKey("ssid");
+    prefs.end();
+    return exists;
+}
+
+bool wifi_config_save(const char *ssid, const char *password)
+{
+    if (!wifi_is_online())
+        return false; // chua online thi cac dia chi duoi day deu la 0.0.0.0, luu vao vo nghia
+
+    Preferences prefs;
+    if (!prefs.begin(NVS_NAMESPACE, false)) // false = mo o che do ghi
+        return false;
+
+    prefs.putString("ssid", ssid);
+    prefs.putString("pass", password);
+    // Luu dang so 32-bit thay vi chuoi: dung dinh dang WiFi.config() nhan vao, khoi phai
+    // parse lai chuoi "192.168.1.5" luc doc ra.
+    prefs.putUInt("ip", (uint32_t)WiFi.localIP());
+    prefs.putUInt("gw", (uint32_t)WiFi.gatewayIP());
+    prefs.putUInt("mask", (uint32_t)WiFi.subnetMask());
+    prefs.putUInt("dns", (uint32_t)WiFi.dnsIP());
+    prefs.end();
+
+    Serial.printf("PLG_>>>> WIFI: da luu cau hinh tinh \"%s\" @ %s\n", ssid, wifi_local_ip_str());
+    return true;
+}
+
+void wifi_config_clear()
+{
+    Preferences prefs;
+    if (!prefs.begin(NVS_NAMESPACE, false))
+        return;
+    // Xoa tung key thay vi prefs.clear(): namespace nay con giu ca giao thuc ket noi dang
+    // chon (key "mode" cua PLG_transport.cpp), xoa sach se lam mat luon lua chon do.
+    prefs.remove("ssid");
+    prefs.remove("pass");
+    prefs.remove("ip");
+    prefs.remove("gw");
+    prefs.remove("mask");
+    prefs.remove("dns");
+    prefs.end();
+    Serial.println("PLG_>>>> WIFI: da quen mang da luu");
+}
+
+const char *wifi_config_ssid()
+{
+    static char ssid_buf[33];
+    ssid_buf[0] = '\0';
+
+    Preferences prefs;
+    if (!prefs.begin(NVS_NAMESPACE, true))
+        return ssid_buf;
+    prefs.getString("ssid", ssid_buf, sizeof(ssid_buf));
+    prefs.end();
+    return ssid_buf;
+}
+
+bool wifi_connect_saved()
+{
+    Preferences prefs;
+    if (!prefs.begin(NVS_NAMESPACE, true))
+        return false;
+    if (!prefs.isKey("ssid"))
+    {
+        prefs.end();
+        return false;
+    }
+
+    char ssid[33] = "";
+    char pass[64] = "";
+    prefs.getString("ssid", ssid, sizeof(ssid));
+    prefs.getString("pass", pass, sizeof(pass));
+    IPAddress ip(prefs.getUInt("ip", 0));
+    IPAddress gw(prefs.getUInt("gw", 0));
+    IPAddress mask(prefs.getUInt("mask", 0));
+    IPAddress dns(prefs.getUInt("dns", 0));
+    prefs.end();
+
+    // Dat dia chi tinh TRUOC khi begin(): goi sau se bi DHCP ghi de.
+    WiFi.config(ip, gw, mask, dns);
+    WiFi.begin(ssid, pass);
+    Serial.printf("PLG_>>>> WIFI: ket noi lai \"%s\" bang IP tinh %s\n", ssid, ip.toString().c_str());
+    return true;
 }
