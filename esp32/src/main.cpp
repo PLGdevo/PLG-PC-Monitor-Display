@@ -19,7 +19,11 @@
 void setup()
 {
     Serial.begin(115200); // dung chung lam kenh debug (Serial.print...) cho ca 3 transport
+
+    // Tat han den bao (khong chi bo phan nhap nhay): neu chi bo doan nhap nhay trong loop() ma
+    // khong ghi muc o day thi den co the nam lai o trang thai sang lì.
     pinMode(PIN_LIGHT_BOARD, OUTPUT);
+    digitalWrite(PIN_LIGHT_BOARD, LOW);
 
     setup_display();
     setup_input();
@@ -79,6 +83,7 @@ void loop()
         break;
     }
 
+#if PLG_HEARTBEAT_LED
     // den bao nhap nhay 1Hz: dau hieu nhin thay ngay la firmware con chay (khong treo)
     if ((int32_t)millis() - timer1 > 500)
     {
@@ -86,4 +91,5 @@ void loop()
         digitalWrite(PIN_LIGHT_BOARD, flat1);
         timer1 = (int32_t)millis();
     }
+#endif
 }

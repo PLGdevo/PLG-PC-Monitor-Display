@@ -43,15 +43,20 @@ void ui_drawText(int16_t x, int16_t y, const char *text, uint16_t color, uint16_
 
 void setup_display()
 {
-    // Den nen man hinh: giai doan nay chi bat cung HIGH. Khi lam tinh nang chinh do sang
-    // se doi sang bam PWM (LEDC) tren chinh chan nay.
-    pinMode(PIN_TFT_BLK, OUTPUT);
-    digitalWrite(PIN_TFT_BLK, HIGH);
+    // Den nen man hinh: chi cau hinh khi that su co dau vao 1 chan GPIO. Cach dau day hien tai
+    // noi thang BLK vao 3.3V (PIN_TFT_BLK = -1) - neu van ghi bua vao chan -1 thi Arduino se
+    // tac dong nham sang mot chan khac.
+    if (PIN_TFT_BLK >= 0)
+    {
+        pinMode(PIN_TFT_BLK, OUTPUT);
+        digitalWrite(PIN_TFT_BLK, HIGH);
+    }
 
-    // SPI phan cung. Khac ban Pico: o do truyen 125000 kHz de "cham tran" phan cung RP2040 va
-    // duoc pico-sdk tu kep xuong; o day KHONG lam vay duoc vi _speedSPIKHz la uint16_t (toi da
-    // 65535) - truyen lon hon se bi tran va cho ra toc do sai. 40 MHz la muc chay on dinh voi
-    // day noi thong thuong; co the nang dan toi 80 MHz neu day ngan/chat luong tot.
+    // SPI phan cung (VSPI - bo SPI mac dinh ma doi tuong `SPI` cua Arduino-ESP32 tro toi).
+    // Khac ban Pico: o do truyen 125000 kHz de "cham tran" phan cung RP2040 va duoc pico-sdk
+    // tu kep xuong; o day KHONG lam vay duoc vi _speedSPIKHz la uint16_t (toi da 65535) -
+    // truyen lon hon se bi tran va cho ra toc do sai. 40 MHz la muc chay on dinh voi day noi
+    // thong thuong; co the nang dan toi 80 MHz neu day ngan/chat luong tot.
     const uint32_t TFT_SCLK_FREQ_KHZ = 40000;
     myTFT.TFTInitSPIType(TFT_SCLK_FREQ_KHZ, &SPI);
 
@@ -66,7 +71,15 @@ void setup_display()
     myTFT.TFTST7789Initialize();
     // Ban Pico xoay man hinh trong setup() cua main; o day gop luon vao day de moi thu lien
     // quan den cau hinh man hinh nam chung mot cho.
-    myTFT.TFTsetRotation(myTFT.TFT_Degrees_270);
+    //
+    // 2 nut chinh huong hinh, doc lap nhau - tam ST7789 moi hang dau day quet mot kieu:
+    //  - TFT_ROTATION: quay anh. Doi 270 <-> 90 neu hinh bi NGUOC DAU (chu van doc duoc).
+    //  - TFT_MIRROR_X: lat guong. Dat true neu chu bi LAT NGUOC nhu soi guong.
+    const ST7789_TFT::TFT_rotate_e TFT_ROTATION = ST7789_TFT::TFT_Degrees_270;
+    const bool TFT_MIRROR_X = true;
+
+    myTFT.TFTsetMirrorX(TFT_MIRROR_X);
+    myTFT.TFTsetRotation(TFT_ROTATION);
     myTFT.TFTfillScreen(ST7789_BLACK);
     myTFT.TFTFontNum(myTFT.TFTFont_Default);
     // Thu vien mac dinh BAT wrap chu (_wrap=true): chu ve vuot bien se tu nhay phan du sang DAU

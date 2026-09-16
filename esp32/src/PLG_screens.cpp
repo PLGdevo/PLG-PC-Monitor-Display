@@ -7,6 +7,7 @@
 #include "PLG_theme.h"
 #include "PLG_pins.h"
 #include "PLG_display.h"
+#include "PLG_input.h"
 #include "PLG_charts.h"
 #include "PLG_serial_link.h"
 #include "PLG_lang.h"
@@ -68,15 +69,17 @@ void MONITOR_BEGIN()
     //  - nhan duoc du lieu that qua Serial (taskmanager_dirty = true), hoac
     //  - nguoi dung nhan nut encoder 2 lan de bo qua thu cong (vd khi chua muon bat monitor.py)
     // Tranh truong hop vao thang man hinh chinh voi du lieu cu/gia (-1) khi PC chua gui gi.
-    bool last_btn = digitalRead(button);
+    // input_select_is_down() thay cho digitalRead(button): chan nao la nut chon con tuy kieu
+    // dieu khien dang bat trong PLG_pins.h (encoder hay 3 nut bam roi).
+    bool last_btn = input_select_is_down();
     int click_count = 0;
     int a = 90;
     while (!taskmanager_dirty && click_count < 2)
     {
         transport_poll();
 
-        bool now_btn = digitalRead(button);
-        if (last_btn == 1 && now_btn == 0) // canh nhan xuong = 1 lan click
+        bool now_btn = input_select_is_down();
+        if (!last_btn && now_btn) // canh nhan xuong = 1 lan click
             click_count++;
         last_btn = now_btn;
 

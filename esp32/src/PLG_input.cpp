@@ -9,10 +9,112 @@
 #include "PLG_transport.h"
 #include "PLG_wifi_ui.h"
 
-/*==================== Tang THO: ISR + doc su kien ====================*/
+/*==================== Tang THO: doc su kien tu phan cung ====================*/
+// Hai kieu dieu khien dung CHUNG mot giao dien ra (input_take_encoder_delta +
+// input_take_button_event) nen tang dieu phoi ben duoi va toan bo man hinh khong he biet dang
+// dung encoder hay 3 nut bam - doi PLG_INPUT_USE_BUTTONS trong PLG_pins.h la xong.
 
-// Bo dem nac encoder, cong/tru trong ISR nen phai volatile.
+// Bo dem "nac quay" tich luy, doc ra bang input_take_encoder_delta().
 static volatile int32_t encoder_delta = 0;
+
+// Chan doc nut dang bi nhan hay khong, theo muc tich cuc da cau hinh.
+static inline bool btn_is_down(uint8_t pin)
+{
+    return digitalRead(pin) == BTN_ACTIVE_LEVEL;
+}
+
+#if PLG_INPUT_USE_BUTTONS
+
+/*--- Kieu 1: 3 nut bam roi (UP / DOWN / SELECT) ---*/
+
+// Loc nay tiep diem: nut co khi nay vai ms moi lan bam/nha. loop() chay ca nghin vong/giay nen
+// neu tin ngay muc doc duoc thi 1 lan bam sinh ra nhieu canh -> nhay nhieu nac cung luc. Chi
+// chap nhan muc moi khi no da giu nguyen du lau.
+static const uint32_t DEBOUNCE_MS = 40;
+
+// Giu nut UP/DOWN thi tu lap lai: cho 600ms roi ban moi 220ms. Khong co lap lai thi khong dung
+// noi man hinh nhap mat khau WiFi (bang ky tu ~90 muc); nhung nhanh qua thi rat de qua da o
+// cac menu ngan vai muc, nen de cham tay.
+static const uint32_t REPEAT_DELAY_MS = 600;
+static const uint32_t REPEAT_RATE_MS = 220;
+
+// Trang thai loc nhieu cua 1 nut. Gom vao struct de 3 nut dung chung mot doan logic.
+struct DebouncedButton
+{
+    bool stable_down = false;  // trang thai da loc, dung de sinh su kien
+    bool raw_last = false;     // muc doc duoc o vong truoc
+    uint32_t changed_at = 0;   // luc muc doc duoc thay doi lan gan nhat
+    uint32_t repeat_at = 0;    // moc ban nac lap lai ke tiep (chi dung cho UP/DOWN)
+};
+
+static DebouncedButton up_btn, down_btn;
+
+// Cap nhat trang thai da loc nhieu cua 1 nut. Tra ve true neu VUA chuyen sang trang thai nhan.
+static bool debounce_update(DebouncedButton &b, uint8_t pin)
+{
+    uint32_t now = millis();
+    bool raw = btn_is_down(pin);
+
+    if (raw != b.raw_last)
+    {
+        b.raw_last = raw;
+        b.changed_at = now; // muc vua doi -> bat dau dem lai, chua tin voi
+        return false;
+    }
+    if (now - b.changed_at < DEBOUNCE_MS)
+        return false; // chua on dinh du lau
+
+    if (raw != b.stable_down)
+    {
+        b.stable_down = raw;
+        return raw; // chi bao su kien o canh NHAN XUONG
+    }
+    return false;
+}
+
+// Cap nhat 1 nut huong, cong nac vao encoder_delta. Goi tu input_take_encoder_delta() - tuc la
+// tu loop(), khong phai tu ngat.
+static void poll_direction_button(DebouncedButton &b, uint8_t pin, int32_t step_value)
+{
+    uint32_t now = millis();
+
+    if (debounce_update(b, pin))
+    {
+        encoder_delta += step_value; // vua bam: 1 nac ngay lap tuc
+        b.repeat_at = now + REPEAT_DELAY_MS;
+    }
+    else if (b.stable_down && (int32_t)(now - b.repeat_at) >= 0)
+    {
+        encoder_delta += step_value; // dang giu va da qua moc: lap lai
+        b.repeat_at = now + REPEAT_RATE_MS;
+    }
+}
+
+void setup_input()
+{
+    // GPIO34/36/39 KHONG co dien tro keo noi bo nen INPUT_PULLUP vo nghia o day - phai co
+    // dien tro keo ngoai, xem ghi chu trong PLG_pins.h.
+    pinMode(BTN_UP, INPUT);
+    pinMode(BTN_DOWN, INPUT);
+    pinMode(BTN_SELECT, INPUT);
+
+    // last_button giu theo quy uoc cu cua ban Pico: 1 = dang tha, 0 = dang nhan.
+    last_button = btn_is_down(BTN_SELECT) ? 0 : 1;
+}
+
+int32_t input_take_encoder_delta()
+{
+    poll_direction_button(up_btn, BTN_UP, +1);
+    poll_direction_button(down_btn, BTN_DOWN, -1);
+
+    int32_t d = encoder_delta;
+    encoder_delta = 0;
+    return d;
+}
+
+#else
+
+/*--- Kieu 0: encoder xoay (hien khong bien dich, bat lai bang PLG_INPUT_USE_BUTTONS 0) ---*/
 
 // ISR phai nam trong IRAM: neu de o flash, mot ngat xay ra dung luc flash dang ban
 // (ghi NVS, doc code chua duoc cache) se lam treo chip.
@@ -55,12 +157,45 @@ int32_t input_take_encoder_delta()
     return d;
 }
 
+#endif // PLG_INPUT_USE_BUTTONS
+
+// Chan nut "chon/xac nhan": nut SELECT roi, hoac nut tren than encoder.
+#if PLG_INPUT_USE_BUTTONS
+#define PLG_SELECT_PIN BTN_SELECT
+#else
+#define PLG_SELECT_PIN button
+#endif
+
 // nhan giu nut > 2s => su kien LONG (chuyen tab); nha nut som hon => su kien SHORT (chon/xac nhan).
 // Co button_long_fired dam bao MOI LAN NHAN chi sinh ra DUNG 1 su kien - neu khong, mot lan giu
 // nut co the vua doi tab vua chon/xac nhan, khien man hinh ve chong len nhau khi chuyen tab.
+#if PLG_INPUT_USE_BUTTONS
+// Nut SELECT cung phai loc nay tiep diem nhu UP/DOWN: khong loc thi 1 lan nha nut co the sinh
+// ra vai su kien "nhan ngan" lien tiep -> vua chon xong da chon tiep muc ke ben.
+// Nhanh encoder khong can: nut tren than encoder di qua duong khac va ban Pico chay on dinh
+// nhieu nam khong loc, them vao chi lam khac hanh vi da duoc kiem chung.
+static DebouncedButton select_btn;
+
+static bool select_down_filtered()
+{
+    debounce_update(select_btn, PLG_SELECT_PIN); // cap nhat trang thai da loc
+    return select_btn.stable_down;
+}
+#else
+static bool select_down_filtered()
+{
+    return btn_is_down(PLG_SELECT_PIN);
+}
+#endif
+
+bool input_select_is_down()
+{
+    return select_down_filtered();
+}
+
 ButtonEvent input_take_button_event()
 {
-    now_button = digitalRead(button);
+    now_button = select_down_filtered() ? 0 : 1; // 0 = dang nhan, giu quy uoc cu cua ban Pico
     ButtonEvent event = BUTTON_NONE;
 
     if (last_button == 1 && now_button == 0)

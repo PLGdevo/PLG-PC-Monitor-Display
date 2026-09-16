@@ -27,6 +27,12 @@ enum ButtonEvent : uint8_t
 // Moi lan nhan chi sinh ra DUNG 1 su kien - ngan/giu lau khong bao gio cung fire.
 ButtonEvent input_take_button_event();
 
+// Nut "chon/xac nhan" co dang bi nhan khong (trang thai tho, khong phai su kien). Dung cho cho
+// nao can tu dem nhip nhan rieng, vd man hinh splash cho nhan 2 lan de bo qua. Co ham nay de
+// cac man hinh khong phai digitalRead() thang - chan nao la nut chon con tuy kieu dieu khien
+// dang bat trong PLG_pins.h (encoder hay 3 nut bam roi).
+bool input_select_is_down();
+
 // Doc encoder + nut, ap dung vao toan bo state UI (tang gia tri dang chon, chuyen man hinh,
 // ap dung + luu NVS khi xac nhan...). Tuong duong key_value_tang/giam + read_button() cua
 // ban Pico gop lai o 1 cho. Goi 1 lan moi vong loop(), truoc khi ve man hinh.

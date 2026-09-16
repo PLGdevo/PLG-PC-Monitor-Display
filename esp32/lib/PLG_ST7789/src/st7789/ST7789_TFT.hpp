@@ -174,6 +174,16 @@ public:
 	void TFTPowerDown(void);
 
 	void TFTsetRotation(TFT_rotate_e r);
+
+	/*!
+		@brief Lat guong anh theo phuong ngang (truc X).
+		@note Them vao ban port ESP32, ban goc khong co. 4 muc xoay san co chi quay anh chu
+		      khong lat guong duoc: 90 va 270 chi hon kem nhau 180 do. Mot so tam ST7789 dau
+		      day quet nguoc nen ra anh guong (chu doc bi lat), luc do phai dao bit MX cua
+		      thanh ghi MADCTL - dung cai nay thay vi doi muc xoay.
+		      Goi truoc hoac sau TFTsetRotation deu duoc: no tu ap dung lai muc xoay hien tai.
+	*/
+	void TFTsetMirrorX(bool mirror);
 	void TFTchangeInvertMode(bool m);
 	void TFTpartialDisplay(bool m);
 	void TFTenableDisplay(bool m);
@@ -196,6 +206,7 @@ private:
 	void AdjustWidthHeight(void);
 
 	const uint16_t _LibVersionNum = 102; /**< library version number eg 171 1.7.1*/
+	bool _mirrorX = false; /**< dao bit MX cua MADCTL de lat guong ngang, xem TFTsetMirrorX */
 
 }; // end of class
 

@@ -217,8 +217,22 @@ void ST7789_TFT ::TFTsetRotation(TFT_rotate_e mode) {
 			_heightTFT = _widthStartTFT;
 			break;
 	}
+	// Nho lai muc xoay dang dung de TFTsetMirrorX() ap dung lai duoc ma khong can nguoi goi
+	// truyen lai (ban goc khai bao TFT_rotate nhung khong bao gio cap nhat no).
+	TFT_rotate = mode;
+	if (_mirrorX)
+		madctl ^= ST7789_MADCTL_MX;
 	writeCommand(ST7789_MADCTL);
 	writeData(madctl);
+}
+
+/*!
+	@brief Lat guong anh theo phuong ngang, xem mo ta o file header.
+	@param mirror true = lat guong, false = binh thuong
+*/
+void ST7789_TFT ::TFTsetMirrorX(bool mirror) {
+	_mirrorX = mirror;
+	TFTsetRotation(TFT_rotate); // ap dung lai muc xoay hien tai kem bit MX moi
 }
 
 /*!
