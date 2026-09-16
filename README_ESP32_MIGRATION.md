@@ -3,12 +3,17 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-ESP32--S3-e7352c.svg)]()
 [![Framework](https://img.shields.io/badge/framework-Arduino--ESP32-00979d.svg)]()
-[![Status](https://img.shields.io/badge/status-planning-lightgrey.svg)]()
+[![Status](https://img.shields.io/badge/status-Sprint%201%20in%20progress-yellow.svg)]()
 
 > Tài liệu này mô tả bản thiết kế cho việc **di dời (migrate)** firmware `PLG_TFT_LCD_TASKMANAGER` từ
 > Raspberry Pi Pico (RP2040) sang **ESP32-S3**, đồng thời bổ sung khả năng kết nối không dây
-> (WiFi / Bluetooth) bên cạnh USB Serial hiện có. Đây là tài liệu thiết kế + backlog — code thực tế
-> chưa được viết, xem [README.md](README.md) để biết trạng thái bản Pico hiện hành.
+> (WiFi / Bluetooth) bên cạnh USB Serial hiện có. Xem [README.md](README.md) để biết trạng thái
+> bản Pico hiện hành.
+
+> **Trạng thái code**: Sprint 0 và Sprint 1 đã viết xong, **build sạch** (`esp32/`, 0 lỗi 0
+> warning, RAM 6.6% / Flash 11.0%) nhưng **chưa nghiệm thu trên phần cứng thật** — theo
+> Definition of Done bên dưới thì chưa được tính là Done. Hướng dẫn build + bảng nghiệm thu:
+> [esp32/README.md](esp32/README.md).
 
 ## Mục lục
 
@@ -146,6 +151,14 @@ Giữ nguyên hành vi hiện tại: cắm USB, `pc_monitor.py` mở cổng COM 
 6. Có thể "quên mạng đã lưu" (giữ nút ở màn hình Status khi đã có cấu hình) để chạy lại wizard.
 
 ## Cấu trúc thư mục dự kiến
+
+> **Thực tế đã triển khai khác 2 điểm** (quyết định trong Sprint 0):
+> 1. Toàn bộ bản ESP32 nằm trong thư mục con `esp32/` thay vì thay thế tại chỗ, để bản Pico
+>    đang chạy được vẫn build/nạp bình thường trong suốt quá trình migrate.
+> 2. **Không đổi sang `Adafruit_ST7789`/`TFT_eSPI`** như dự kiến bên dưới. Khi khảo sát thì
+>    `ST7789_TFT_PICO` chỉ phụ thuộc pico-SDK ở lớp phần cứng rất mỏng (vài macro GPIO, 2 lời
+>    gọi SPI, 2 hàm delay) — nên port chính thư viện đó sang Arduino HAL (`esp32/lib/PLG_ST7789/`)
+>    rẻ hơn nhiều so với vẽ lại UI, và giữ giao diện giống hệt từng pixel.
 
 ```
 PLG_TFT_LCD_TASKMANAGER/

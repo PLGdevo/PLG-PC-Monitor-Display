@@ -6,3 +6,4 @@ pc_monitor/*.spec
 pc_monitor/__pycache__
 pc_monitor/test_out.txt
 pc_monitor/test_out.txt.err
+esp32/.pio
